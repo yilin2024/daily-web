@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#111310">
+  <meta name="theme-color" content="#141414">
   <meta name="description" content="Yilin’s Daily Work · 日常工作手记. A personal home for projects, tasks, and progress.">
   <link rel="icon" href="./favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="./styles.css">
@@ -15,13 +15,14 @@
 
   <div id="welcome">
     <header class="welcome-header">
+      <button id="welcome-menu" class="round-control" type="button" aria-label="Menu / 导航" aria-expanded="false" aria-controls="welcome-navigation"><i data-icon="menu"></i></button>
       <a class="signature" href="#welcome" aria-label="Yilin’s Daily Work home">
-        <img src="./favicon.svg" width="32" height="32" alt="">Yilin
+        <span class="brand-mark" aria-hidden="true"><i data-icon="layers"></i></span>Yilin
       </a>
-      <nav class="welcome-nav" aria-label="Main navigation">
+      <nav class="welcome-nav" id="welcome-navigation" aria-label="Main navigation">
         <a href="#welcome" aria-current="page" aria-label="Home / 首页"><i data-icon="home"></i><span class="nav-text">Home <small lang="zh-Hans">首页</small></span></a>
-        <a href="#projects" aria-label="Projects / 项目"><i data-icon="folder"></i><span class="nav-text">Projects <small lang="zh-Hans">项目</small></span></a>
-        <a href="#tasks" aria-label="Tasks / 任务"><i data-icon="tasks"></i><span class="nav-text">Tasks <small lang="zh-Hans">任务</small></span></a>
+        <a href="#projects" aria-label="Projects / 项目" title="Projects / 项目"><i data-icon="folder"></i><span class="nav-text">Projects <small lang="zh-Hans">项目</small></span></a>
+        <a href="#tasks" aria-label="Tasks / 任务" title="Tasks / 任务"><i data-icon="tasks"></i><span class="nav-text">Tasks <small lang="zh-Hans">任务</small></span></a>
       </nav>
       <div class="welcome-tools">
         <time id="welcome-date"></time>
@@ -32,10 +33,10 @@
     <main id="welcome-main" tabindex="-1">
       <div class="welcome-hero">
         <div class="welcome-heading">
+          <h1>Yilin’s <span>Daily Work.</span></h1>
           <p class="welcome-zh" lang="zh-Hans">Yilin 的日常工作</p>
-          <h1>Yilin’s <span>Daily Work<span class="welcome-period">.</span></span></h1>
+          <a class="enter-work" href="#overview">Enter workspace <span lang="zh-Hans">进入工作台</span><i data-icon="arrow"></i></a>
         </div>
-        <a class="enter-work" href="#overview">Enter workspace <span lang="zh-Hans">进入工作台</span><i data-icon="arrow"></i></a>
         <div class="welcome-art">
           <div class="astronaut-portrait">
             <img id="astronaut" src="./assets/research-robot.webp" width="860" height="860" alt="An ink-drawn astronaut with two glowing pixel eyes" fetchpriority="high" draggable="false">
@@ -43,7 +44,6 @@
           </div>
         </div>
         <blockquote class="welcome-quotation">
-          <span class="opening-quote" aria-hidden="true">“</span>
           <p lang="zh-Hans">那些看似不起波澜的日复一日，会在某天突然让人看到坚持的意义。</p>
           <p lang="en">One day, you’ll look back on those quiet, ordinary days and suddenly understand what it meant to keep going.</p>
         </blockquote>
@@ -59,7 +59,7 @@
 
   <div class="layout" id="workspace" hidden>
     <aside id="sidebar" aria-label="Workspace navigation">
-      <a class="brand" href="#welcome" aria-label="Back to Yilin’s Daily Work"><img src="./favicon.svg" width="35" height="35" alt=""><span>Daily Work</span></a>
+      <a class="brand" href="#welcome" aria-label="Back to Yilin’s Daily Work"><span class="brand-mark" aria-hidden="true"><i data-icon="layers"></i></span><span>Daily Work</span></a>
       <div class="navigation"><p class="eyebrow">Workspace</p><nav id="nav" aria-label="Main"></nav>
       <div class="rail-heading"><p class="eyebrow">My projects</p><button class="icon-button" data-action="new-project" aria-label="Add project"><span aria-hidden="true">+</span></button></div>
       <nav id="project-nav" aria-label="My projects"></nav></div>

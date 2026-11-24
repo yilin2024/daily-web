@@ -127,6 +127,7 @@ function notify(message) {
   toastTimer=setTimeout(()=>$("#message").textContent="",3000);
 }
 function setRoute(){
+  $("#welcome-menu").setAttribute("aria-expanded", "false");
   const [page,key] = location.hash.slice(1).split("/");
   let nextRoute = "welcome";
   if (page === "project" && getProject(key)) nextRoute = "project";
@@ -138,7 +139,7 @@ function setRoute(){
 function applyAppearance(value) {
   const light = value === "light";
   document.documentElement.dataset.appearance = light ? "light" : "dark";
-  $('meta[name="theme-color"]').setAttribute("content", light ? "#f7f7f0" : "#111310");
+  $('meta[name="theme-color"]').setAttribute("content", light ? "#f8f8f6" : "#141414");
   document.querySelectorAll('[data-action="appearance"]').forEach(button => {
     const label = light ? "Switch to dark mode / 切换为深色模式" : "Switch to light mode / 切换为浅色模式";
     button.setAttribute("aria-label", label);
@@ -158,6 +159,31 @@ function renderWelcome() {
   $("#welcome-today").textContent = openTasks.filter(task => task.due === today).length;
 }
 function closeMenu(){document.body.classList.remove("menu-open");$("#menu-btn").setAttribute("aria-expanded","false");$("#scrim").hidden=true;}
+
+function setupWelcomeMenu() {
+  const button = $("#welcome-menu");
+  const nav = $("#welcome-navigation");
+  const isOpen = () => button.getAttribute("aria-expanded") === "true";
+  function close() { button.setAttribute("aria-expanded", "false"); }
+
+  button.addEventListener("click", () => {
+    if (isOpen()) { close(); return; }
+    button.setAttribute("aria-expanded", "true");
+    nav.querySelector("a").focus();
+  });
+  document.addEventListener("click", event => {
+    if (!isOpen() || button.contains(event.target)) return;
+    if (event.target.closest('a[href="#welcome"]')) button.focus();
+    close();
+  });
+  document.addEventListener("focusin", event => {
+    if (isOpen() && event.target !== button && !nav.contains(event.target)) close();
+  });
+  document.addEventListener("keydown", event => {
+    if (event.key === "Escape" && isOpen()) { close(); button.focus(); }
+  });
+  window.matchMedia?.("(max-width: 700px)").addEventListener("change", close);
+}
 
 function setupAstronautGaze() {
   const hero = $(".welcome-hero");
@@ -302,7 +328,11 @@ function options(values,selected) {
 }
 function taskResults(project){
   const selected = project?project.id:projectFilter;
-  return rows(filtered(state.tasks.filter(t=>(selected==="All"||t.project===selected) && t.title.toLocaleLowerCase().includes(search.toLocaleLowerCase())),taskFilter));
+  const query = search.toLocaleLowerCase();
+  const matches = filtered(state.tasks.filter(task =>
+    (selected === "All" || task.project === selected) && task.title.toLocaleLowerCase().includes(query)
+  ), taskFilter);
+  return '<p class="result-count" role="status">'+plural(matches.length,"task")+'</p>'+rows(matches);
 }
 function taskPage(project){
   let heading='<div class="page-heading"><h1>My tasks</h1></div>';
@@ -467,6 +497,7 @@ document.addEventListener("visibilitychange",refreshDay);
 setInterval(refreshDay,60000);
 
 document.querySelectorAll("[data-icon]").forEach(el=>el.outerHTML=icon(el.dataset.icon));
+setupWelcomeMenu();
 const syncAstronautGaze = setupAstronautGaze();
 let savedAppearance;
 try { savedAppearance = localStorage.getItem(appearanceKey); } catch { /* Use the default appearance. */ }
