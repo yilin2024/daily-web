@@ -14,23 +14,23 @@
   <div class="weather" aria-hidden="true"><div class="rain"></div><div class="sunlight"></div></div>
   <a class="skip" href="#welcome-main">Skip to content</a>
 
-  <div id="welcome">
-    <header class="welcome-header">
-      <button id="welcome-menu" class="round-control" type="button" aria-label="Menu / 导航" aria-expanded="false" aria-controls="welcome-navigation"><i data-icon="menu"></i></button>
-      <a class="signature" href="#welcome" aria-label="Yilin’s Daily Work home">
-        <span class="brand-mark" aria-hidden="true"><i data-icon="layers"></i></span>Yilin
-      </a>
-      <nav class="welcome-nav" id="welcome-navigation" aria-label="Main navigation">
-        <a href="#welcome" aria-current="page" aria-label="Home / 首页"><i data-icon="home"></i><span class="nav-text">Home <small lang="zh-Hans">首页</small></span></a>
-        <a href="#projects" aria-label="Projects / 项目" title="Projects / 项目"><i data-icon="folder"></i><span class="nav-text">Projects <small lang="zh-Hans">项目</small></span></a>
-        <a href="#tasks" aria-label="Tasks / 任务" title="Tasks / 任务"><i data-icon="tasks"></i><span class="nav-text">Tasks <small lang="zh-Hans">任务</small></span></a>
-      </nav>
-      <div class="welcome-tools">
-        <time id="welcome-date"></time>
-        <button class="appearance-btn" data-action="appearance" aria-label="Switch to light mode / 切换为浅色模式"><i data-icon="sun"></i></button>
-      </div>
-    </header>
+  <header class="welcome-header">
+    <a class="signature" href="#welcome" aria-label="Yilin’s Daily Work home">
+      <span class="brand-mark" aria-hidden="true"><i data-icon="layers"></i></span>Yilin
+    </a>
+    <nav class="welcome-nav" id="welcome-navigation" aria-label="Main navigation">
+      <a href="#welcome" aria-current="location" aria-label="Home / 首页"><span class="nav-indicator" aria-hidden="true"></span><i data-icon="home"></i><span class="nav-text">Home <small lang="zh-Hans">首页</small></span></a>
+      <a href="#overview" aria-label="Overview / 总览"><i data-icon="grid"></i><span class="nav-text">Overview <small lang="zh-Hans">总览</small></span></a>
+      <a href="#projects" aria-label="Projects / 项目"><i data-icon="folder"></i><span class="nav-text">Projects <small lang="zh-Hans">项目</small></span></a>
+      <a href="#tasks" aria-label="Tasks / 任务"><i data-icon="tasks"></i><span class="nav-text">Tasks <small lang="zh-Hans">任务</small></span></a>
+    </nav>
+    <div class="welcome-tools">
+      <time id="welcome-date"></time>
+      <button class="appearance-btn" data-action="appearance" aria-label="Switch to light mode / 切换为浅色模式"><i data-icon="sun"></i></button>
+    </div>
+  </header>
 
+  <div id="welcome">
     <section id="welcome-main" aria-labelledby="welcome-title" tabindex="-1">
       <div class="welcome-hero">
         <div class="welcome-heading">
@@ -62,7 +62,11 @@
   <div class="layout" id="workspace" hidden>
     <aside id="sidebar" aria-label="Workspace navigation">
       <a class="brand" href="#welcome" aria-label="Back to Yilin’s Daily Work"><span class="brand-mark" aria-hidden="true"><i data-icon="layers"></i></span><span>Daily Work</span></a>
-      <div class="navigation"><p class="eyebrow">Workspace</p><nav id="nav" aria-label="Main"></nav>
+      <div class="navigation"><p class="eyebrow">Workspace</p><nav id="nav" aria-label="Workspace sections">
+        <a class="nav-link" href="#overview"><i data-icon="grid"></i>Overview</a>
+        <a class="nav-link" href="#projects"><i data-icon="folder"></i>Projects</a>
+        <a class="nav-link" href="#tasks"><i data-icon="tasks"></i>My tasks</a>
+      </nav>
       <div class="rail-heading"><p class="eyebrow">My projects</p><button class="icon-button" data-action="new-project" aria-label="Add project"><span aria-hidden="true">+</span></button></div>
       <nav id="project-nav" aria-label="My projects"></nav></div>
       <div class="rail-bottom"><button class="data-link" data-action="data"><i data-icon="database"></i>Workspace data</button>
@@ -70,8 +74,8 @@
     </aside>
     <button id="scrim" aria-label="Close navigation" data-action="menu" hidden></button>
     <div class="workarea">
-      <header class="topbar" id="overview"><div class="crumb"><button id="menu-btn" class="icon-button" data-action="menu" aria-controls="sidebar" aria-expanded="false" aria-label="Open navigation"><i data-icon="menu"></i></button><i data-icon="panel"></i><span>Workspace</span><span class="slash">/</span><strong id="crumb">Overview</strong></div>
-      <div class="top-actions"><button class="appearance-btn" data-action="appearance" aria-label="Switch to light mode / 切换为浅色模式"><i data-icon="sun"></i></button><button class="primary" data-action="new-task"><i data-icon="plus"></i>New task</button></div></header>
+      <header class="topbar" id="overview" aria-label="Workspace overview" tabindex="-1"><div class="crumb"><button id="menu-btn" class="icon-button" data-action="menu" aria-controls="sidebar" aria-expanded="false" aria-label="Open navigation"><i data-icon="menu"></i></button><i data-icon="panel"></i><span>Workspace</span><span class="slash">/</span><strong id="crumb">Overview</strong></div>
+      <div class="top-actions"><button class="primary" data-action="new-task"><i data-icon="plus"></i>New task</button></div></header>
       <main id="main" tabindex="-1"></main>
     </div>
   </div>

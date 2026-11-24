@@ -126,15 +126,21 @@ function notify(message) {
   clearTimeout(toastTimer); $("#message").textContent=message;
   toastTimer=setTimeout(()=>$("#message").textContent="",3000);
 }
-function setRoute(){
-  $("#welcome-menu").setAttribute("aria-expanded", "false");
+function setRoute(navigating = false){
+  const previous = route;
+  const previousFilter = taskFilter;
   const [page,key] = location.hash.slice(1).split("/");
   let nextRoute = "welcome";
   if (page === "project" && getProject(key)) nextRoute = "project";
   else if (["overview", "tasks", "projects"].includes(page)) nextRoute = page;
-  if (nextRoute!==route || key!==projectId) {taskFilter="Open";projectFilter="All";search="";}
+  const changed = nextRoute !== route || (key || "") !== projectId;
+  const hadQuery = projectFilter !== "All" || search !== "";
+  if (changed) {taskFilter="Open";projectFilter="All";search="";}
   if (nextRoute === "tasks" && key === "today") taskFilter = "Today";
-  route=nextRoute;projectId=key||"";closeMenu();render();
+  route=nextRoute;projectId=key||"";closeMenu();
+  document.title = route === "welcome" ? "Yilin’s Daily Work · 日常工作手记" :
+    (route === "project" ? getProject(projectId).name : sectionTitles[route]) + " · Yilin’s Daily Work";
+  if (!navigating || previous === "project" || route === "project" || previousFilter !== taskFilter || (changed && hadQuery)) render();
 }
 function applyAppearance(value) {
   const light = value === "light";
@@ -159,29 +165,55 @@ function renderWelcome() {
 }
 function closeMenu(){document.body.classList.remove("menu-open");$("#menu-btn").setAttribute("aria-expanded","false");$("#scrim").hidden=true;}
 
-function setupWelcomeMenu() {
-  const button = $("#welcome-menu");
-  const nav = $("#welcome-navigation");
-  const isOpen = () => button.getAttribute("aria-expanded") === "true";
-  function close() { button.setAttribute("aria-expanded", "false"); }
+const sectionLinks = Array.from(document.querySelectorAll("#welcome-navigation a"));
+const sidebarLinks = Array.from(document.querySelectorAll("#nav a"));
+const sectionTitles = {welcome:"Home", overview:"Overview", projects:"Projects", tasks:"My tasks"};
 
-  button.addEventListener("click", () => {
-    if (isOpen()) { close(); return; }
-    button.setAttribute("aria-expanded", "true");
-    nav.querySelector("a").focus();
-  });
-  document.addEventListener("click", event => {
-    if (!isOpen() || button.contains(event.target)) return;
-    if (event.target.closest('a[href="#welcome"]')) button.focus();
-    close();
-  });
-  document.addEventListener("focusin", event => {
-    if (isOpen() && event.target !== button && !nav.contains(event.target)) close();
-  });
-  document.addEventListener("keydown", event => {
-    if (event.key === "Escape" && isOpen()) { close(); button.focus(); }
-  });
-  window.matchMedia?.("(max-width: 700px)").addEventListener("change", close);
+function syncSectionNavigation() {
+  const header = $(".welcome-header");
+  const nav = $("#welcome-navigation");
+  const detail = route === "project";
+  let section = detail ? "projects" : "welcome";
+  if (!detail) {
+    // Use the same landing line as the anchors, including room below the pinned header.
+    const landingLine = header.offsetHeight + 14;
+    for (const link of sectionLinks.slice(1)) {
+      const target = document.getElementById(link.hash.slice(1));
+      if (target && target.getBoundingClientRect().top <= landingLine) section = target.id;
+    }
+  }
+  const scrolled = detail || window.scrollY > 8;
+  if (header.hasAttribute("data-scrolled") !== scrolled) header.toggleAttribute("data-scrolled", scrolled);
+  if (nav.dataset.section !== section) {
+    nav.dataset.section = section;
+    const marker = nav.querySelector(".nav-indicator");
+    const active = sectionLinks.find(link => link.hash === "#" + section);
+    if (active && active !== marker.parentElement) {
+      const previous = marker.getBoundingClientRect();
+      marker.getAnimations?.().forEach(animation => animation.cancel());
+      active.prepend(marker);
+      const next = marker.getBoundingClientRect();
+      if (next.width && marker.animate && window.matchMedia("(prefers-reduced-motion: no-preference)").matches) {
+        marker.animate([
+          {transform: "translateX("+(previous.left-next.left)+"px) scaleX("+previous.width/next.width+")"},
+          {transform: "none"}
+        ], {duration:300, easing:"cubic-bezier(.2,.8,.2,1)"});
+      }
+    }
+    for (const link of [...sectionLinks, ...sidebarLinks]) {
+      if (link.hash === "#" + section) link.setAttribute("aria-current", "location");
+      else link.removeAttribute("aria-current");
+    }
+  }
+  const label = detail ? getProject(projectId)?.name : sectionTitles[section === "welcome" ? "overview" : section];
+  if (label && $("#crumb").textContent !== label) $("#crumb").textContent = label;
+}
+
+function scrollToRoute(behavior = "auto", focus = true) {
+  const target = route === "project" ? $("#overview") : document.getElementById(route);
+  target.scrollIntoView({block:"start", behavior});
+  if (focus) (route === "welcome" ? $("#welcome-main") : route === "project" ? $("#main") : target).focus({preventScroll:true});
+  syncSectionNavigation();
 }
 
 function setupAstronautGaze() {
@@ -195,44 +227,84 @@ function setupAstronautGaze() {
   const motion = window.matchMedia("(any-hover: hover) and (any-pointer: fine) and (prefers-reduced-motion: no-preference)");
   // Eye patches in the original 860px-square artwork, measured as fractions of its size.
   const eyes = [[.306, .371, .056, .059], [.472, .361, .059, .060]];
-  let tracking = false;
-  let frame = 0;
-  let aimX = 0;
-  let aimY = 0;
+  const artwork = document.createElement("canvas");
+  artwork.width = canvas.width;
+  artwork.height = canvas.height;
+  const face = artwork.getContext("2d");
+  if (!face) return () => {};
+  let tracking = false, frame = 0, lastTime = 0;
+  let aimX = 0, aimY = 0, headX = 0, headY = 0;
 
   function rest() {
-    if (frame) cancelAnimationFrame(frame);
-    frame = 0;
+    cancelAnimationFrame(frame);
+    frame = lastTime = aimX = aimY = headX = headY = 0;
+    portrait.classList.remove("is-tracking");
     context.clearRect(0, 0, canvas.width, canvas.height);
-    portrait.style.removeProperty("--lean");
   }
 
-  function draw() {
-    frame = 0;
-    if (!image.complete || !image.naturalWidth) return;
-    const size = canvas.width;
-    context.clearRect(0, 0, size, size);
+  function paint() {
+    const size = artwork.width;
+    face.clearRect(0, 0, size, size);
+    face.drawImage(image, 0, 0, size, size);
     for (const [centerX, centerY, fractionW, fractionH] of eyes) {
       const x = centerX * size, y = centerY * size;
       const width = Math.round(fractionW * size), height = Math.round(fractionH * size);
       const left = Math.round(x - width / 2), top = Math.round(y - height / 2);
-      const mask = context.createRadialGradient(x, y, Math.min(width, height) * .46, x, y, Math.max(width, height) * .72);
+      const mask = face.createRadialGradient(x, y, Math.min(width, height) * .46, x, y, Math.max(width, height) * .72);
       mask.addColorStop(0, "#030401");
       mask.addColorStop(1, "rgba(3,4,1,0)");
-      context.fillStyle = mask;
-      context.fillRect(x - width, y - height, width * 2, height * 2);
-      context.drawImage(image, left, top, width, height, left + Math.round(aimX * 8), top + Math.round(aimY * 6), width, height);
+      face.fillStyle = mask;
+      face.fillRect(x - width, y - height, width * 2, height * 2);
+      face.drawImage(image, left, top, width, height, left + Math.round(headX * 11), top + Math.round(headY * 8), width, height);
     }
-    portrait.style.setProperty("--lean", (aimX * 1.6) + "deg");
+
+    // Move the helmet as a unit. Taper its displacement through the collar to the fixed suit.
+    const neck = Math.round(size * .50), shoulders = Math.round(size * .71);
+    const offsetX = headX * size * .038, offsetY = headY * size * .016;
+    context.clearRect(0, 0, size, size);
+    context.drawImage(artwork, 0, 0, size, neck, Math.round(offsetX), Math.round(offsetY), size, neck);
+    let destTop = neck + Math.round(offsetY), weight = 1;
+    for (let top = neck; top < shoulders; top += 6) {
+      const bottom = Math.min(top + 6, shoulders);
+      const t = (bottom - neck) / (shoulders - neck);
+      const nextWeight = 1 - t * t * (3 - 2 * t);
+      const destBottom = bottom + Math.round(offsetY * nextWeight);
+      const dx = Math.round(offsetX * (weight + nextWeight) / 2);
+      context.drawImage(artwork, 0, top, size, bottom-top, dx, destTop, size, destBottom-destTop);
+      weight = nextWeight;
+      destTop = destBottom;
+    }
+    context.drawImage(artwork, 0, shoulders, size, size-shoulders, 0, shoulders, size, size-shoulders);
+    portrait.classList.add("is-tracking");
   }
+
+  function draw(time) {
+    frame = 0;
+    if (!image.complete || !image.naturalWidth) return;
+    const blend = 1 - Math.exp(-(lastTime ? time - lastTime : 16) / 70);
+    lastTime = time;
+    headX += (aimX - headX) * blend;
+    headY += (aimY - headY) * blend;
+    const settled = Math.abs(aimX-headX) + Math.abs(aimY-headY) < .003;
+    if (settled) {
+      headX = aimX; headY = aimY; lastTime = 0;
+      if (!headX && !headY) { rest(); return; }
+    }
+    paint();
+    if (!settled) frame = requestAnimationFrame(draw);
+  }
+
+  function aim(x, y) {
+    aimX = x; aimY = y;
+    if (!frame) frame = requestAnimationFrame(draw);
+  }
+  function recenter() { aim(0, 0); }
 
   function follow(event) {
     if (event.pointerType === "touch") { rest(); return; }
     const rect = hero.getBoundingClientRect();
     const normalize = fraction => Math.max(-1, Math.min(1, fraction * 2 - 1));
-    aimX = normalize((event.clientX - rect.left) / rect.width);
-    aimY = normalize((event.clientY - rect.top) / rect.height);
-    if (!frame) frame = requestAnimationFrame(draw);
+    aim(normalize((event.clientX - rect.left) / rect.width), normalize((event.clientY - rect.top) / rect.height));
   }
 
   function sync() {
@@ -241,11 +313,11 @@ function setupAstronautGaze() {
     tracking = enabled;
     if (enabled) {
       hero.addEventListener("pointermove", follow);
-      hero.addEventListener("pointerleave", rest);
+      hero.addEventListener("pointerleave", recenter);
       hero.addEventListener("pointercancel", rest);
     } else {
       hero.removeEventListener("pointermove", follow);
-      hero.removeEventListener("pointerleave", rest);
+      hero.removeEventListener("pointerleave", recenter);
       hero.removeEventListener("pointercancel", rest);
       rest();
     }
@@ -255,26 +327,22 @@ function setupAstronautGaze() {
 }
 
 function render(){
-  const welcome = route === "welcome";
-  const page = welcome ? "overview" : route;
-  $("#welcome").hidden = page !== "overview";
+  const detail = route === "project";
+  const project = detail ? getProject(projectId) : null;
+  if (detail && !project) { location.hash = "projects"; return; }
+  $("#welcome").hidden = detail;
   $("#workspace").hidden = false;
   syncAstronautGaze();
-  $(".skip").href = welcome ? "#welcome-main" : "#main";
-  if (page === "overview") renderWelcome();
-  const project = route==="project" ? getProject(projectId) : null;
-  if(route==="project" && !project){location.hash="projects";return;}
-  const pages=[["overview","Overview","grid"],["projects","Projects","folder"],["tasks","My tasks","tasks"]];
-  const title=project?project.name:pages.find(p=>p[0]===page)[1];
-  document.title = welcome ? "Yilin’s Daily Work · 日常工作手记" : title+" · Yilin’s Daily Work";
-  $("#crumb").textContent=title;
-  $("#nav").innerHTML=pages.map(([key,label,symbol])=>'<a class="nav-link '+(key===page?"active":"")+'" '+(key===page?'aria-current="page"':'')+' href="#'+key+'">'+icon(symbol)+label+'</a>').join("");
+  $(".skip").href = route === "welcome" ? "#welcome-main" : "#main";
+  renderWelcome();
+  if (project) document.title = project.name + " · Yilin’s Daily Work";
   $("#project-nav").innerHTML=state.projects.map(p=>'<a class="project-link '+(project?.id===p.id?"active":"")+'" href="#project/'+p.id+'" style="'+theme(p.color)+'"><span class="dot"></span><span>'+esc(p.name)+'</span></a>').join("");
   $("#workspace-type").textContent = state.projects.some(p=>p.sample) || state.tasks.some(t=>t.sample) ? "Sample workspace" : "Saved in this browser";
   const main=$("#main");
-  if (page==="overview") main.innerHTML=overview();
-  if (route==="projects") main.innerHTML='<div class="page-heading"><h1>Projects</h1><button class="secondary" data-action="new-project">'+icon("plus")+'New project</button></div>'+cards(state.projects);
-  if (route==="tasks" || project) main.innerHTML=taskPage(project);
+  main.innerHTML = detail ? taskPage(project) : overview() +
+    '<section id="projects" class="workspace-section" tabindex="-1" aria-labelledby="projects-title"><div class="section-heading"><h2 id="projects-title">Projects</h2><button class="secondary" data-action="new-project">'+icon("plus")+'New project</button></div>'+cards(state.projects)+'</section>'+
+    '<section id="tasks" class="workspace-section" tabindex="-1" aria-labelledby="tasks-title">'+taskPage(null)+'</section>';
+  syncSectionNavigation();
   if (loadError){const error=document.createElement("p");error.className="error";error.textContent=loadError;main.prepend(error);}
 }
 function statusPill(status){return '<span class="status '+(status==="Complete"?"complete":status==="In progress"?"active":"")+'">'+status+'</span>';}
@@ -294,7 +362,6 @@ function overview(){
   const intro=due.length ? plural(due.length,"task")+' due today. '+plural(active,"active project")+' in your workspace.' : 'Nothing due today. '+plural(open.length,"open task")+' in your workspace.';
   return '<section class="hero"><div class="hero-copy"><div class="date-label">'+icon("sun")+date+'</div><h1>Workspace overview</h1><p>'+intro+'</p></div></section>'+
     '<div class="stats">'+metric(active,"Active projects","folder","moss")+metric(open.length,"Open tasks","tasks","clay")+metric(completed,"Completed tasks","complete","iris")+metric((state.tasks.length?Math.round(completed/state.tasks.length*100):0)+"%","Overall progress","chart","lake")+'</div>'+
-    '<section class="section">'+sectionHead("My projects","projects","All projects")+cards(state.projects.slice(0,3))+'</section>'+
     '<section class="section">'+sectionHead("Task focus","tasks","All tasks")+'<div class="task-panel">'+tabs(["Today","Upcoming","Overdue"],focusFilter,"focus")+rows(filtered(open,focusFilter))+'</div></section>';
 }
 function tabs(names,selected,action){
@@ -333,7 +400,7 @@ function taskResults(project){
   return '<p class="result-count" role="status">'+plural(matches.length,"task")+'</p>'+rows(matches);
 }
 function taskPage(project){
-  let heading='<div class="page-heading"><h1>My tasks</h1></div>';
+  let heading='<div class="section-heading"><h2 id="tasks-title">My tasks</h2></div>';
   if(project){
     const {done,tasks,percent,status}=progress(project);
     heading='<div class="page-heading"><h1>'+esc(project.name)+'</h1><button class="secondary" data-action="edit-project" data-key="'+project.id+'">'+icon("pencil")+'Edit project</button></div><div class="detail" style="'+theme(project.color)+'">'+statusPill(status)+'<div class="card-foot"><p>'+esc(project.description)+'</p><strong>'+percent+'%</strong></div><div class="track"><span style="width:'+percent+'%"></span></div><div class="card-foot">'+done+' of '+plural(tasks.length,"task")+' done</div></div><div class="section-heading"><h2>Project tasks</h2></div>';
@@ -460,7 +527,18 @@ $(".skip").addEventListener("click", event => {
   event.preventDefault();
   $(route === "welcome" ? "#welcome-main" : "#main").focus();
 });
-document.addEventListener("click",e=>{if(e.target.closest("#sidebar a"))closeMenu();});
+document.addEventListener("click", event => {
+  const link = event.target.closest("a[href]");
+  if (!link) return;
+  if (link.closest("#sidebar, #welcome-navigation")) closeMenu();
+  // The filtered task shortcut has no literal anchor and may be selected twice.
+  if (link.hash === "#tasks/today" && location.hash === link.hash &&
+      !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) {
+    event.preventDefault();
+    setRoute(true);
+    scrollToRoute();
+  }
+});
 document.addEventListener("submit",submitRecord);
 document.addEventListener("input",e=>{
   if(e.target.id==="task-search"){search=e.target.value;$("#results").innerHTML=taskResults(route==="project"?getProject(projectId):null);}
@@ -481,10 +559,8 @@ document.addEventListener("change",async e=>{
 dialog.addEventListener("click",e=>{if(e.target===dialog){const r=dialog.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)dialog.close();}});
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!dialog.open&&document.body.classList.contains("menu-open")){closeMenu();$("#menu-btn").focus();}});
 window.addEventListener("hashchange", () => {
-  setRoute();
-  if (route === "overview") $("#overview").scrollIntoView({block:"start"});
-  else window.scrollTo({top:0, behavior:route === "welcome" ? "auto" : "instant"});
-  $(route === "welcome" ? "#welcome-main" : "#main").focus({preventScroll:true});
+  setRoute(true);
+  scrollToRoute();
 });
 window.addEventListener("storage",e=>{
   if (e.key === appearanceKey) { applyAppearance(e.newValue); return; }
@@ -500,11 +576,12 @@ document.addEventListener("visibilitychange",refreshDay);
 setInterval(refreshDay,60000);
 
 document.querySelectorAll("[data-icon]").forEach(el=>el.outerHTML=icon(el.dataset.icon));
-setupWelcomeMenu();
+window.addEventListener("scroll", syncSectionNavigation, {passive:true});
+window.addEventListener("resize", syncSectionNavigation);
 const syncAstronautGaze = setupAstronautGaze();
 let savedAppearance;
 try { savedAppearance = localStorage.getItem(appearanceKey); } catch { /* Use the default appearance. */ }
 applyAppearance(savedAppearance);
 load();
 setRoute();
-if (route === "overview") $("#overview").scrollIntoView({block:"start", behavior:"instant"});
+if (route !== "welcome") scrollToRoute("instant", false);
