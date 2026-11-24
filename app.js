@@ -137,6 +137,7 @@ function setRoute(navigating = false){
   const hadQuery = projectFilter !== "All" || search !== "";
   if (changed) {taskFilter="Open";projectFilter="All";search="";}
   if (nextRoute === "tasks" && key === "today") taskFilter = "Today";
+  if (nextRoute === "tasks" && key === "open") taskFilter = "Open";
   route=nextRoute;projectId=key||"";closeMenu();
   document.title = route === "welcome" ? "Yilin’s Daily Work · 日常工作手记" :
     (route === "project" ? getProject(projectId).name : sectionTitles[route]) + " · Yilin’s Daily Work";
@@ -531,8 +532,8 @@ document.addEventListener("click", event => {
   const link = event.target.closest("a[href]");
   if (!link) return;
   if (link.closest("#sidebar, #welcome-navigation")) closeMenu();
-  // The filtered task shortcut has no literal anchor and may be selected twice.
-  if (link.hash === "#tasks/today" && location.hash === link.hash &&
+  // Filtered task shortcuts share one section and can be selected again after scrolling.
+  if (link.hash.startsWith("#tasks/") && location.hash === link.hash &&
       !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) {
     event.preventDefault();
     setRoute(true);
