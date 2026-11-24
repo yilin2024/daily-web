@@ -634,8 +634,8 @@ body { isolation: isolate; padding-top: var(--header-height); }
   background: url("./assets/desk-lamplight.png") center top / 100% auto no-repeat;
   pointer-events: none;
 }
-/* Keep the writing and tail frames running behind the cat's expressive upper body. */
-.pixel-writer[data-cat-pose] { background-image: none; }
+/* The clean desk keeps the pen and hanging tail moving underneath the animated cat. */
+.pixel-writer[data-cat-ready] { --desk-art: url("./assets/writing-stage.webp"); }
 .pixel-writer::before {
   content: "";
   position: absolute;
@@ -645,16 +645,12 @@ body { isolation: isolate; padding-top: var(--header-height); }
   pointer-events: none;
   display: none;
 }
-.pixel-writer[data-cat-pose]::before {
-  display: block;
-  clip-path: polygon(0 0, 66.666667% 0, 66.666667% 42.96875%, 88.333333% 42.96875%, 88.333333% 0, 100% 0, 100% 100%, 0 100%);
-}
 .cat-hit {
   position: absolute;
   z-index: 2;
   right: 2%;
   top: 1%;
-  width: max(31%, 44px);
+  width: max(37%, 44px);
   height: max(79%, 44px);
   padding: 0;
   border-radius: 36%;
@@ -663,7 +659,8 @@ body { isolation: isolate; padding-top: var(--header-height); }
 }
 .cat-hit:focus-visible { outline: 2px dashed var(--ink); outline-offset: 0; }
 .cat-tail { display: none; }
-.cat-scene { position: absolute; inset: auto auto 57.03125% 60%; width: 37.5%; height: auto; z-index: 1; pointer-events: none; image-rendering: pixelated; }
+.cat-scene { position: absolute; inset: -9.375% auto auto 53.333333%; width: 38.333333%; height: auto; z-index: 1; pointer-events: none; image-rendering: pixelated; }
+:root[data-appearance="dark"] .cat-scene { filter: drop-shadow(-.65px -.5px 0 rgb(240 223 202 / 45%)); }
 .cat-announcement { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 /* Twelve frames across, eight rows. Each step moves exactly one frame. */
 @keyframes desk-columns { to { background-position-x: calc(1200% / 11); } }
@@ -681,7 +678,6 @@ body { isolation: isolate; padding-top: var(--header-height); }
       display: block;
       clip-path: polygon(0 0, 100% 0, 100% 42.96875%, 66.666667% 42.96875%, 66.666667% 100%, 0 100%);
     }
-    .pixel-writer[data-cat-pose]::before { clip-path: inset(0 33.333333% 0 0); }
     .cat-tail {
       display: block; position: absolute; inset: 0; pointer-events: none;
       clip-path: inset(42.96875% 0 0 66.666667%); isolation: isolate; background-position: inherit;

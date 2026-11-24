@@ -133,7 +133,7 @@
 .cal-week-block .cal-time { white-space: nowrap; font-size: 11px; }
 .cal-week-block .cal-event-title { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: var(--title-lines); overflow: hidden; line-height: 16px; }
 .cal-week-schedule .cal-ruler span:first-child { transform: none; }
-#calendar[data-view="day"] > :is(.section-heading, .cal-toolbar, .cal-sheet) { max-width: 540px; margin-inline: auto; }
+#calendar[data-view="day"] > :is(.section-heading, .cal-toolbar, .cal-sheet) { max-width: 860px; margin-inline: auto; }
 .cal-day-halves {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -141,6 +141,7 @@
   margin-top: 18px;
 }
 .cal-half { min-width: 0; }
+#calendar[data-view="day"] .cal-agenda { padding-inline: clamp(8px, 2cqw, 24px); }
 .cal-half h4 {
   display: flex; align-items: baseline; gap: 6px; padding-block: 8px;
   border-block: 1px solid var(--cal-rule); font-size: 16px; font-weight: 580;
