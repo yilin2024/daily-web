@@ -78,6 +78,7 @@ function validate(data) {
   }
   for (const t of data.tasks) {
     if (!t || !validId(t.id) || taskIds.has(t.id) || !validText(t.title) || (t.project!=="" && !projectIds.has(t.project)) || !priorities.includes(t.priority) || !groups.includes(t.status) || !validDay(t.due)) throw Error("Invalid task in workspace.");
+    if (t.time !== undefined && t.time !== "" && (!t.due || typeof t.time !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/.test(t.time))) throw Error("Invalid task time in workspace.");
     taskIds.add(t.id);
   }
   return data;
@@ -135,7 +136,7 @@ function setRoute(navigating = false){
   const [page,key] = location.hash.slice(1).split("/");
   let nextRoute = "welcome";
   if (page === "project" && getProject(key)) nextRoute = "project";
-  else if (["overview", "tasks", "projects"].includes(page)) nextRoute = page;
+  else if (["overview", "tasks", "projects", "calendar"].includes(page)) nextRoute = page;
   const changed = nextRoute !== route || (key || "") !== projectId;
   const hadQuery = projectFilter !== "All" || search !== "";
   if (changed) {taskFilter="Open";projectFilter="All";search="";}
@@ -144,7 +145,7 @@ function setRoute(navigating = false){
   route=nextRoute;projectId=key||"";closeMenu();
   document.title = route === "welcome" ? "Yilin’s Daily Work · 日常工作手记" :
     (route === "project" ? getProject(projectId).name : sectionTitles[route]) + " · Yilin’s Daily Work";
-  if (!navigating || previous === "project" || route === "project" || previousFilter !== taskFilter || (changed && hadQuery)) render();
+  if (!navigating || previous === "project" || route === "project" || previous === "calendar" || route === "calendar" || previousFilter !== taskFilter || (changed && hadQuery)) render();
 }
 function applyAppearance(value) {
   const light = value === "light";
@@ -180,14 +181,15 @@ const sectionLinks = Array.from(document.querySelectorAll("#welcome-navigation a
 const sidebarLinks = Array.from(document.querySelectorAll("#nav a"));
 const heroDesk = $(".welcome-art");
 const cornerDesk = $(".writing-corner");
-const sectionTitles = {welcome:"Home", overview:"Overview", projects:"Projects", tasks:"My tasks"};
+const sectionTitles = {welcome:"Home", overview:"Overview", projects:"Projects", tasks:"My tasks", calendar:"Calendar"};
 
 function syncSectionNavigation() {
   const header = $(".welcome-header");
   const nav = $("#welcome-navigation");
   const detail = route === "project";
-  let section = detail ? "projects" : "welcome";
-  if (!detail) {
+  const standalone = detail || route === "calendar";
+  let section = detail ? "projects" : route === "calendar" ? "calendar" : "welcome";
+  if (!standalone) {
     // Use the same landing line as the anchors, including room below the pinned header.
     const landingLine = header.offsetHeight + 14;
     for (const link of sectionLinks.slice(1)) {
@@ -195,8 +197,8 @@ function syncSectionNavigation() {
       if (target && target.getBoundingClientRect().top <= landingLine) section = target.id;
     }
   }
-  cornerDesk.toggleAttribute("data-visible", detail || heroDesk.getBoundingClientRect().bottom <= header.offsetHeight);
-  const scrolled = detail || window.scrollY > 8;
+  cornerDesk.toggleAttribute("data-visible", standalone || heroDesk.getBoundingClientRect().bottom <= header.offsetHeight);
+  const scrolled = standalone || window.scrollY > 8;
   if (header.hasAttribute("data-scrolled") !== scrolled) header.toggleAttribute("data-scrolled", scrolled);
   if (nav.dataset.section !== section) {
     nav.dataset.section = section;
@@ -224,9 +226,10 @@ function syncSectionNavigation() {
 }
 
 function scrollToRoute(behavior = "auto", focus = true) {
-  const target = route === "project" ? $("#overview") : document.getElementById(route);
+  const standalone = route === "project" || route === "calendar";
+  const target = standalone ? $("#overview") : document.getElementById(route);
   target.scrollIntoView({block:"start", behavior});
-  if (focus) (route === "welcome" ? $("#welcome-main") : route === "project" ? $("#main") : target).focus({preventScroll:true});
+  if (focus) (route === "welcome" ? $("#welcome-main") : standalone ? $("#main") : target).focus({preventScroll:true});
   syncSectionNavigation();
 }
 
@@ -234,7 +237,7 @@ function render(){
   const detail = route === "project";
   const project = detail ? getProject(projectId) : null;
   if (detail && !project) { location.hash = "projects"; return; }
-  $("#welcome").hidden = detail;
+  $("#welcome").hidden = detail || route === "calendar";
   $("#workspace").hidden = false;
   $(".skip").href = route === "welcome" ? "#welcome-main" : "#main";
   renderWelcome();
@@ -242,10 +245,17 @@ function render(){
   $("#project-nav").innerHTML=state.projects.map(p=>'<a class="project-link '+(project?.id===p.id?"active":"")+'" href="#project/'+p.id+'" style="'+theme(p.color)+'"><span class="dot"></span><span>'+esc(p.name)+'</span></a>').join("");
   $("#workspace-type").textContent = state.projects.some(p=>p.sample) || state.tasks.some(t=>t.sample) ? "Sample workspace" : "Saved in this browser";
   const main=$("#main");
-  main.innerHTML = detail ? taskPage(project) : overview() +
+  const focusedTask = document.activeElement.closest("#calendar button[data-action][data-key]");
+  main.innerHTML = route === "calendar" ? calendarPage() : detail ? taskPage(project) : overview() +
     '<section id="projects" class="workspace-section" tabindex="-1" aria-labelledby="projects-title"><div class="section-heading"><h2 id="projects-title">Projects</h2><button class="secondary" data-action="new-project">'+icon("plus")+'New project</button></div>'+cards(state.projects)+'</section>'+
     '<section id="tasks" class="workspace-section" tabindex="-1" aria-labelledby="tasks-title">'+taskPage(null)+'</section>';
   syncSectionNavigation();
+  if (route === "calendar" && focusedTask) {
+    const {action, key} = focusedTask.dataset;
+    const matches = main.querySelectorAll(`button[data-action="${action}"][data-key="${key}"]`);
+    const nextFocus = Array.from(matches).find(button => button.getClientRects().length) || main.querySelector('.cal-modes [aria-pressed="true"]');
+    nextFocus.focus({preventScroll:true});
+  }
   if (loadError){const error=document.createElement("p");error.className="error";error.textContent=loadError;main.prepend(error);}
 }
 function statusPill(status){return '<span class="status '+(status==="Complete"?"complete":status==="In progress"?"active":"")+'">'+status+'</span>';}
@@ -327,9 +337,10 @@ function editor(kind,record) {
   if (kind==="task") {
     fields=field("Task name",'<input name="title" value="'+esc(record?.title||"")+'" required maxlength="240" autofocus>')+
       field("Project",select("project",[["","Unassigned"],...state.projects.map(p=>[p.id,p.name])],record?.project??(route==="project"?projectId:"")))+
+      '<div class="form-pair">'+field("Due date",'<input name="due" type="date" value="'+esc(record?.due??(route==="calendar"?dayKey(calendarDate):dayKey()))+'">')+
+      field("Time (optional)",'<input name="time" type="time" value="'+esc(record?.time||"")+'">')+'</div>'+
       '<div class="form-pair">'+field("Priority",select("priority",priorities.map(x=>[x,x]),record?.priority||"Medium"))+
-      field("Due date",'<input name="due" type="date" value="'+esc(record?.due??dayKey())+'">')+'</div>'+
-      field("Status",select("status",groups.map(x=>[x,x]),record?.status||"To do"));
+      field("Status",select("status",groups.map(x=>[x,x]),record?.status||"To do"))+'</div>';
   } else {
     fields=field("Project name",'<input name="name" value="'+esc(record?.name||"")+'" required maxlength="100" autofocus>')+
       field("Description",'<textarea name="description" maxlength="500">'+esc(record?.description||"")+'</textarea>')+
@@ -377,6 +388,11 @@ function submitRecord(event){
   for (const name of Object.keys(fields)) fields[name]=fields[name].trim();
   const name=task?"title":"name";
   if(!fields[name]){form.elements[name].setCustomValidity("Enter a name.");form.elements[name].reportValidity();return;}
+  if (task && fields.time && !fields.due) {
+    form.elements.due.setCustomValidity("Choose a date for this time.");
+    form.elements.due.reportValidity();
+    return;
+  }
   const collection=task?"tasks":"projects", next=structuredClone(state);
   const record={id:key||id(),...fields,sample:false};
   if(key){
@@ -452,6 +468,7 @@ document.addEventListener("submit",submitRecord);
 document.addEventListener("input",e=>{
   if(e.target.id==="task-search"){search=e.target.value;$("#results").innerHTML=taskResults(route==="project"?getProject(projectId):null);}
   if(e.target.matches("#record-form input"))e.target.setCustomValidity("");
+  if(e.target.matches("#record-form [name=time]"))e.target.form.elements.due.setCustomValidity("");
 });
 document.addEventListener("change",async e=>{
   if(e.target.id==="project-filter"){projectFilter=e.target.value;$("#results").innerHTML=taskResults(null);}
@@ -481,7 +498,10 @@ window.addEventListener("storage",e=>{
 });
 let renderedDay=dayKey();
 function refreshDay(){
-  if(!document.hidden && dayKey()!==renderedDay){renderedDay=dayKey();render();}
+  if(!document.hidden && dayKey()!==renderedDay){
+    if (dayKey(calendarDate) === renderedDay) calendarDate = new Date(dayKey() + "T12:00:00");
+    renderedDay=dayKey();render();
+  }
 }
 document.addEventListener("visibilitychange",refreshDay);
 setInterval(refreshDay,60000);

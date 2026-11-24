@@ -6,9 +6,11 @@
   <meta name="theme-color" content="#141414">
   <meta name="description" content="Yilin’s Daily Work · 日常工作手记. A personal home for projects, tasks, and progress.">
   <link rel="icon" href="./favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles.css?v=task-type">
+  <link rel="stylesheet" href="./styles.css?v=calendar">
+  <link rel="stylesheet" href="./calendar.css?v=1">
   <title>Yilin’s Daily Work · 日常工作手记</title>
-  <script defer src="./app.js?v=rain-control"></script>
+  <script defer src="./calendar.js?v=1"></script>
+  <script defer src="./app.js?v=calendar"></script>
 </head>
 <body>
   <div class="weather" aria-hidden="true"><div class="rain" id="rain"></div><div class="sunlight"></div></div>
@@ -20,6 +22,7 @@
       <a href="#overview" aria-label="Overview / 总览"><i data-icon="grid"></i><span class="nav-text">Overview <small lang="zh-Hans">总览</small></span></a>
       <a href="#projects" aria-label="Projects / 项目"><i data-icon="folder"></i><span class="nav-text">Projects <small lang="zh-Hans">项目</small></span></a>
       <a href="#tasks" aria-label="Tasks / 任务"><i data-icon="tasks"></i><span class="nav-text">Tasks <small lang="zh-Hans">任务</small></span></a>
+      <a href="#calendar" aria-label="Calendar / 日历"><i data-icon="calendar"></i><span class="nav-text">Calendar <small lang="zh-Hans">日历</small></span></a>
     </nav>
     <div class="welcome-tools">
       <time id="welcome-date"></time>
@@ -61,6 +64,7 @@
         <a class="nav-link" href="#overview"><i data-icon="grid"></i>Overview</a>
         <a class="nav-link" href="#projects"><i data-icon="folder"></i>Projects</a>
         <a class="nav-link" href="#tasks"><i data-icon="tasks"></i>My tasks</a>
+        <a class="nav-link" href="#calendar"><i data-icon="calendar"></i>Calendar</a>
       </nav>
       <div class="rail-heading"><p class="eyebrow">My projects</p><button class="icon-button" data-action="new-project" aria-label="Add project"><span aria-hidden="true">+</span></button></div>
       <nav id="project-nav" aria-label="My projects"></nav></div>
