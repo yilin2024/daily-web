@@ -11,6 +11,7 @@
   <script defer src="./app.js"></script>
 </head>
 <body>
+  <div class="weather" aria-hidden="true"><div class="rain"></div><div class="sunlight"></div></div>
   <a class="skip" href="#welcome-main">Skip to content</a>
 
   <div id="welcome">
@@ -30,10 +31,10 @@
       </div>
     </header>
 
-    <main id="welcome-main" tabindex="-1">
+    <section id="welcome-main" aria-labelledby="welcome-title" tabindex="-1">
       <div class="welcome-hero">
         <div class="welcome-heading">
-          <h1>Yilin’s <span>Daily Work.</span></h1>
+          <h1 id="welcome-title">Yilin’s <span>Daily Work.</span></h1>
           <p class="welcome-zh" lang="zh-Hans">Yilin 的日常工作</p>
           <a class="enter-work" href="#overview">Enter workspace <span lang="zh-Hans">进入工作台</span><i data-icon="arrow"></i></a>
         </div>
@@ -44,8 +45,8 @@
           </div>
         </div>
         <blockquote class="welcome-quotation">
-          <p lang="zh-Hans">那些看似不起波澜的日复一日，会在某天突然让人看到坚持的意义。</p>
-          <p lang="en">One day, you’ll look back on those quiet, ordinary days and suddenly understand what it meant to keep going.</p>
+          <p lang="zh-Hans">日积跬步，终至千里</p>
+          <p lang="en">A step with every dawn,<br>till a thousand miles lie behind.</p>
         </blockquote>
       </div>
 
@@ -54,7 +55,8 @@
         <a href="#tasks"><span class="summary-icon"><i data-icon="tasks"></i></span><span class="summary-name">Open tasks<small lang="zh-Hans">待办任务</small></span><strong id="welcome-open">–</strong><i data-icon="arrow"></i></a>
         <a href="#tasks/today"><span class="summary-icon"><i data-icon="calendar"></i></span><span class="summary-name">Due today<small lang="zh-Hans">今日到期</small></span><strong id="welcome-today">–</strong><i data-icon="arrow"></i></a>
       </nav>
-    </main>
+      <a class="scroll-to-work" href="#overview"><i data-icon="arrow"></i>Scroll <span lang="zh-Hans">下滑</span></a>
+    </section>
   </div>
 
   <div class="layout" id="workspace" hidden>
@@ -68,7 +70,7 @@
     </aside>
     <button id="scrim" aria-label="Close navigation" data-action="menu" hidden></button>
     <div class="workarea">
-      <header class="topbar"><div class="crumb"><button id="menu-btn" class="icon-button" data-action="menu" aria-controls="sidebar" aria-expanded="false" aria-label="Open navigation"><i data-icon="menu"></i></button><i data-icon="panel"></i><span>Workspace</span><span class="slash">/</span><strong id="crumb">Overview</strong></div>
+      <header class="topbar" id="overview"><div class="crumb"><button id="menu-btn" class="icon-button" data-action="menu" aria-controls="sidebar" aria-expanded="false" aria-label="Open navigation"><i data-icon="menu"></i></button><i data-icon="panel"></i><span>Workspace</span><span class="slash">/</span><strong id="crumb">Overview</strong></div>
       <div class="top-actions"><button class="appearance-btn" data-action="appearance" aria-label="Switch to light mode / 切换为浅色模式"><i data-icon="sun"></i></button><button class="primary" data-action="new-task"><i data-icon="plus"></i>New task</button></div></header>
       <main id="main" tabindex="-1"></main>
     </div>

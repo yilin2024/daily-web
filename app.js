@@ -148,7 +148,6 @@ function applyAppearance(value) {
   });
 }
 function renderWelcome() {
-  document.title = "Yilin’s Daily Work · 日常工作手记";
   const today = dayKey();
   const openTasks = state.tasks.filter(task => task.status !== "Done");
   const date = $("#welcome-date");
@@ -257,24 +256,23 @@ function setupAstronautGaze() {
 
 function render(){
   const welcome = route === "welcome";
-  $("#welcome").hidden = !welcome;
-  $("#workspace").hidden = welcome;
+  const page = welcome ? "overview" : route;
+  $("#welcome").hidden = page !== "overview";
+  $("#workspace").hidden = false;
   syncAstronautGaze();
   $(".skip").href = welcome ? "#welcome-main" : "#main";
-  if (welcome) {
-    renderWelcome();
-    return;
-  }
+  if (page === "overview") renderWelcome();
   const project = route==="project" ? getProject(projectId) : null;
   if(route==="project" && !project){location.hash="projects";return;}
   const pages=[["overview","Overview","grid"],["projects","Projects","folder"],["tasks","My tasks","tasks"]];
-  const title=project?project.name:pages.find(p=>p[0]===route)[1];
-  document.title=title+" · Yilin’s Daily Work";$("#crumb").textContent=title;
-  $("#nav").innerHTML=pages.map(([page,label,symbol])=>'<a class="nav-link '+(route===page?"active":"")+'" '+(route===page?'aria-current="page"':'')+' href="#'+page+'">'+icon(symbol)+label+'</a>').join("");
+  const title=project?project.name:pages.find(p=>p[0]===page)[1];
+  document.title = welcome ? "Yilin’s Daily Work · 日常工作手记" : title+" · Yilin’s Daily Work";
+  $("#crumb").textContent=title;
+  $("#nav").innerHTML=pages.map(([key,label,symbol])=>'<a class="nav-link '+(key===page?"active":"")+'" '+(key===page?'aria-current="page"':'')+' href="#'+key+'">'+icon(symbol)+label+'</a>').join("");
   $("#project-nav").innerHTML=state.projects.map(p=>'<a class="project-link '+(project?.id===p.id?"active":"")+'" href="#project/'+p.id+'" style="'+theme(p.color)+'"><span class="dot"></span><span>'+esc(p.name)+'</span></a>').join("");
   $("#workspace-type").textContent = state.projects.some(p=>p.sample) || state.tasks.some(t=>t.sample) ? "Sample workspace" : "Saved in this browser";
   const main=$("#main");
-  if (route==="overview") main.innerHTML=overview();
+  if (page==="overview") main.innerHTML=overview();
   if (route==="projects") main.innerHTML='<div class="page-heading"><h1>Projects</h1><button class="secondary" data-action="new-project">'+icon("plus")+'New project</button></div>'+cards(state.projects);
   if (route==="tasks" || project) main.innerHTML=taskPage(project);
   if (loadError){const error=document.createElement("p");error.className="error";error.textContent=loadError;main.prepend(error);}
@@ -482,7 +480,12 @@ document.addEventListener("change",async e=>{
 });
 dialog.addEventListener("click",e=>{if(e.target===dialog){const r=dialog.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)dialog.close();}});
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!dialog.open&&document.body.classList.contains("menu-open")){closeMenu();$("#menu-btn").focus();}});
-window.addEventListener("hashchange",()=>{setRoute();window.scrollTo(0,0);$(route==="welcome"?"#welcome-main":"#main").focus({preventScroll:true});});
+window.addEventListener("hashchange", () => {
+  setRoute();
+  if (route === "overview") $("#overview").scrollIntoView({block:"start"});
+  else window.scrollTo({top:0, behavior:route === "welcome" ? "auto" : "instant"});
+  $(route === "welcome" ? "#welcome-main" : "#main").focus({preventScroll:true});
+});
 window.addEventListener("storage",e=>{
   if (e.key === appearanceKey) { applyAppearance(e.newValue); return; }
   if(e.key!==storageKey&&e.key!==null) return;
@@ -504,3 +507,4 @@ try { savedAppearance = localStorage.getItem(appearanceKey); } catch { /* Use th
 applyAppearance(savedAppearance);
 load();
 setRoute();
+if (route === "overview") $("#overview").scrollIntoView({block:"start", behavior:"instant"});
