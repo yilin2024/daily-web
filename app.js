@@ -168,6 +168,8 @@ function closeMenu(){document.body.classList.remove("menu-open");$("#menu-btn").
 
 const sectionLinks = Array.from(document.querySelectorAll("#welcome-navigation a"));
 const sidebarLinks = Array.from(document.querySelectorAll("#nav a"));
+const heroDesk = $(".welcome-art");
+const cornerDesk = $(".writing-corner");
 const sectionTitles = {welcome:"Home", overview:"Overview", projects:"Projects", tasks:"My tasks"};
 
 function syncSectionNavigation() {
@@ -183,6 +185,7 @@ function syncSectionNavigation() {
       if (target && target.getBoundingClientRect().top <= landingLine) section = target.id;
     }
   }
+  cornerDesk.toggleAttribute("data-visible", detail || heroDesk.getBoundingClientRect().bottom <= header.offsetHeight);
   const scrolled = detail || window.scrollY > 8;
   if (header.hasAttribute("data-scrolled") !== scrolled) header.toggleAttribute("data-scrolled", scrolled);
   if (nav.dataset.section !== section) {
@@ -217,109 +220,12 @@ function scrollToRoute(behavior = "auto", focus = true) {
   syncSectionNavigation();
 }
 
-function setupAstronautGaze() {
-  const hero = $(".welcome-hero");
-  const art = $(".welcome-art");
-  const portrait = $(".astronaut-portrait");
-  const image = $("#astronaut");
-  const canvas = $("#astronaut-gaze");
-  const context = canvas.getContext?.("2d");
-  if (!context || !window.matchMedia) return () => {};
-
-  const motion = window.matchMedia("(any-hover: hover) and (any-pointer: fine) and (prefers-reduced-motion: no-preference)");
-  // Eye patches in the original 860px-square artwork, measured as fractions of its size.
-  const eyes = [[.306, .371, .056, .059], [.472, .361, .059, .060]];
-  let tracking = false, frame = 0, lastTime = 0;
-  let aimX = 0, aimY = 0, eyeX = 0, eyeY = 0, bodyX = 0, bodyY = 0;
-
-  function rest() {
-    cancelAnimationFrame(frame);
-    frame = lastTime = aimX = aimY = eyeX = eyeY = bodyX = bodyY = 0;
-    portrait.style.removeProperty("transform");
-    context.clearRect(0, 0, canvas.width, canvas.height);
-  }
-
-  function paintEyes() {
-    const size = canvas.width;
-    const dx = Math.round(eyeX * 11), dy = Math.round(eyeY * 8);
-    context.clearRect(0, 0, canvas.width, canvas.height);
-    if (!dx && !dy) return;
-    for (const [centerX, centerY, fractionW, fractionH] of eyes) {
-      const x = centerX * size, y = centerY * size;
-      const width = Math.round(fractionW * size), height = Math.round(fractionH * size);
-      const left = Math.round(x - width / 2), top = Math.round(y - height / 2);
-      const mask = context.createRadialGradient(x, y, Math.min(width, height) * .46, x, y, Math.max(width, height) * .72);
-      mask.addColorStop(0, "#030401");
-      mask.addColorStop(1, "rgba(3,4,1,0)");
-      context.fillStyle = mask;
-      context.fillRect(x - width, y - height, width * 2, height * 2);
-      context.drawImage(image, left, top, width, height, left + dx, top + dy, width, height);
-    }
-  }
-
-  function draw(time) {
-    frame = 0;
-    if (!image.complete || !image.naturalWidth) return;
-    const elapsed = lastTime ? time - lastTime : 16;
-    const gazeBlend = 1 - Math.exp(-elapsed / 55);
-    const bodyBlend = 1 - Math.exp(-elapsed / 150);
-    lastTime = time;
-    eyeX += (aimX - eyeX) * gazeBlend;
-    eyeY += (aimY - eyeY) * gazeBlend;
-    bodyX += (aimX - bodyX) * bodyBlend;
-    bodyY += (aimY - bodyY) * bodyBlend;
-    const settled = Math.max(Math.abs(aimX-bodyX), Math.abs(aimY-bodyY), Math.abs(aimX-eyeX), Math.abs(aimY-eyeY)) < .002;
-    if (settled) {
-      eyeX = bodyX = aimX; eyeY = bodyY = aimY; lastTime = 0;
-      if (!aimX && !aimY) { rest(); return; }
-    }
-    portrait.style.transform = `translate(${bodyX * 4.5}%, ${bodyY * 2.8}%)`;
-    paintEyes();
-    if (!settled) frame = requestAnimationFrame(draw);
-  }
-
-  function aim(x, y) {
-    aimX = x; aimY = y;
-    if (!frame) frame = requestAnimationFrame(draw);
-  }
-  function recenter() { aim(0, 0); }
-
-  function follow(event) {
-    if (event.pointerType === "touch") { rest(); return; }
-    // Measure the stationary frame so the moving portrait never chases its own offset.
-    const rect = art.getBoundingClientRect();
-    if (!rect.width || !rect.height) return;
-    const x = (event.clientX - rect.left) / rect.width - .39;
-    const y = (event.clientY - rect.top) / rect.height - .37;
-    aim(Math.tanh(x / .8), Math.tanh(y / .8));
-  }
-
-  function sync() {
-    const enabled = !$("#welcome").hidden && motion.matches;
-    if (enabled === tracking) return;
-    tracking = enabled;
-    if (enabled) {
-      hero.addEventListener("pointermove", follow);
-      hero.addEventListener("pointerleave", recenter);
-      hero.addEventListener("pointercancel", rest);
-    } else {
-      hero.removeEventListener("pointermove", follow);
-      hero.removeEventListener("pointerleave", recenter);
-      hero.removeEventListener("pointercancel", rest);
-      rest();
-    }
-  }
-  motion.addEventListener("change", sync);
-  return sync;
-}
-
 function render(){
   const detail = route === "project";
   const project = detail ? getProject(projectId) : null;
   if (detail && !project) { location.hash = "projects"; return; }
   $("#welcome").hidden = detail;
   $("#workspace").hidden = false;
-  syncAstronautGaze();
   $(".skip").href = route === "welcome" ? "#welcome-main" : "#main";
   renderWelcome();
   if (project) document.title = project.name + " · Yilin’s Daily Work";
@@ -565,7 +471,6 @@ setInterval(refreshDay,60000);
 document.querySelectorAll("[data-icon]").forEach(el=>el.outerHTML=icon(el.dataset.icon));
 window.addEventListener("scroll", syncSectionNavigation, {passive:true});
 window.addEventListener("resize", syncSectionNavigation);
-const syncAstronautGaze = setupAstronautGaze();
 let savedAppearance;
 try { savedAppearance = localStorage.getItem(appearanceKey); } catch { /* Use the default appearance. */ }
 applyAppearance(savedAppearance);
