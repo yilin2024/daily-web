@@ -548,7 +548,7 @@ body { isolation: isolate; padding-top: var(--header-height); }
   display: block;
   aspect-ratio: 120 / 64;
   image-rendering: pixelated;
-  background: url("./assets/writing-studio.webp?v=silver-tabby") 0 0 / 1200% 800% no-repeat;
+  background: url("./assets/writing-studio.webp?v=charcoal-tabby") 0 0 / 1200% 800% no-repeat;
 }
 :root[data-appearance="dark"] .pixel-writer::after {
   content: "";
