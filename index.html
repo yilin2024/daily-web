@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#203f37">
+  <meta name="description" content="A personal workspace for tracking projects, tasks, and progress.">
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./styles.css">
+  <title>Overview · Fieldwork</title>
+  <script defer src="./app.js"></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <div class="layout">
+    <aside id="sidebar" aria-label="Workspace navigation">
+      <a class="brand" href="#overview"><img src="./favicon.svg" width="35" height="35" alt=""><span>Fieldwork</span></a>
+      <div class="navigation"><p class="eyebrow">Workspace</p><nav id="nav" aria-label="Main"></nav>
+      <div class="rail-heading"><p class="eyebrow">My projects</p><button class="icon-button" data-action="new-project" aria-label="Add project"><span aria-hidden="true">+</span></button></div>
+      <nav id="project-nav" aria-label="My projects"></nav></div>
+      <div class="rail-bottom"><button class="data-link" data-action="data"><i data-icon="database"></i>Workspace data</button>
+      <div class="profile"><span class="avatar"><i data-icon="user"></i></span><div><strong>My workspace</strong><small id="workspace-type">Saved in this browser</small></div></div></div>
+    </aside>
+    <button id="scrim" aria-label="Close navigation" data-action="menu" hidden></button>
+    <div class="workarea">
+      <header class="topbar"><div class="crumb"><button id="menu-btn" class="icon-button" data-action="menu" aria-controls="sidebar" aria-expanded="false" aria-label="Open navigation"><i data-icon="menu"></i></button><i data-icon="panel"></i><span>Workspace</span><span class="slash">/</span><strong id="crumb">Overview</strong></div>
+      <button class="primary" data-action="new-task"><i data-icon="plus"></i>New task</button></header>
+      <main id="main" tabindex="-1"></main>
+    </div>
+  </div>
+  <dialog id="editor" aria-labelledby="dialog-title"></dialog>
+  <div id="message" role="status" aria-live="polite"></div>
+  <noscript>Enable JavaScript to use this workspace.</noscript>
+</body>
+</html>
