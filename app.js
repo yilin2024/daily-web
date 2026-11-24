@@ -219,6 +219,7 @@ function scrollToRoute(behavior = "auto", focus = true) {
 
 function setupAstronautGaze() {
   const hero = $(".welcome-hero");
+  const art = $(".welcome-art");
   const portrait = $(".astronaut-portrait");
   const image = $("#astronaut");
   const canvas = $("#astronaut-gaze");
@@ -228,70 +229,52 @@ function setupAstronautGaze() {
   const motion = window.matchMedia("(any-hover: hover) and (any-pointer: fine) and (prefers-reduced-motion: no-preference)");
   // Eye patches in the original 860px-square artwork, measured as fractions of its size.
   const eyes = [[.306, .371, .056, .059], [.472, .361, .059, .060]];
-  const artwork = document.createElement("canvas");
-  artwork.width = canvas.width;
-  artwork.height = canvas.height;
-  const face = artwork.getContext("2d");
-  if (!face) return () => {};
   let tracking = false, frame = 0, lastTime = 0;
-  let aimX = 0, aimY = 0, headX = 0, headY = 0;
+  let aimX = 0, aimY = 0, eyeX = 0, eyeY = 0, bodyX = 0, bodyY = 0;
 
   function rest() {
     cancelAnimationFrame(frame);
-    frame = lastTime = aimX = aimY = headX = headY = 0;
-    portrait.classList.remove("is-tracking");
+    frame = lastTime = aimX = aimY = eyeX = eyeY = bodyX = bodyY = 0;
+    portrait.style.removeProperty("transform");
     context.clearRect(0, 0, canvas.width, canvas.height);
   }
 
-  function paint() {
-    const size = artwork.width;
-    face.clearRect(0, 0, size, size);
-    face.drawImage(image, 0, 0, size, size);
+  function paintEyes() {
+    const size = canvas.width;
+    const dx = Math.round(eyeX * 11), dy = Math.round(eyeY * 8);
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    if (!dx && !dy) return;
     for (const [centerX, centerY, fractionW, fractionH] of eyes) {
       const x = centerX * size, y = centerY * size;
       const width = Math.round(fractionW * size), height = Math.round(fractionH * size);
       const left = Math.round(x - width / 2), top = Math.round(y - height / 2);
-      const mask = face.createRadialGradient(x, y, Math.min(width, height) * .46, x, y, Math.max(width, height) * .72);
+      const mask = context.createRadialGradient(x, y, Math.min(width, height) * .46, x, y, Math.max(width, height) * .72);
       mask.addColorStop(0, "#030401");
       mask.addColorStop(1, "rgba(3,4,1,0)");
-      face.fillStyle = mask;
-      face.fillRect(x - width, y - height, width * 2, height * 2);
-      face.drawImage(image, left, top, width, height, left + Math.round(headX * 11), top + Math.round(headY * 8), width, height);
+      context.fillStyle = mask;
+      context.fillRect(x - width, y - height, width * 2, height * 2);
+      context.drawImage(image, left, top, width, height, left + dx, top + dy, width, height);
     }
-
-    // Move the helmet as a unit. Taper its displacement through the collar to the fixed suit.
-    const neck = Math.round(size * .50), shoulders = Math.round(size * .71);
-    const offsetX = headX * size * .038, offsetY = headY * size * .016;
-    context.clearRect(0, 0, size, size);
-    context.drawImage(artwork, 0, 0, size, neck, Math.round(offsetX), Math.round(offsetY), size, neck);
-    let destTop = neck + Math.round(offsetY), weight = 1;
-    for (let top = neck; top < shoulders; top += 6) {
-      const bottom = Math.min(top + 6, shoulders);
-      const t = (bottom - neck) / (shoulders - neck);
-      const nextWeight = 1 - t * t * (3 - 2 * t);
-      const destBottom = bottom + Math.round(offsetY * nextWeight);
-      const dx = Math.round(offsetX * (weight + nextWeight) / 2);
-      context.drawImage(artwork, 0, top, size, bottom-top, dx, destTop, size, destBottom-destTop);
-      weight = nextWeight;
-      destTop = destBottom;
-    }
-    context.drawImage(artwork, 0, shoulders, size, size-shoulders, 0, shoulders, size, size-shoulders);
-    portrait.classList.add("is-tracking");
   }
 
   function draw(time) {
     frame = 0;
     if (!image.complete || !image.naturalWidth) return;
-    const blend = 1 - Math.exp(-(lastTime ? time - lastTime : 16) / 70);
+    const elapsed = lastTime ? time - lastTime : 16;
+    const gazeBlend = 1 - Math.exp(-elapsed / 55);
+    const bodyBlend = 1 - Math.exp(-elapsed / 150);
     lastTime = time;
-    headX += (aimX - headX) * blend;
-    headY += (aimY - headY) * blend;
-    const settled = Math.abs(aimX-headX) + Math.abs(aimY-headY) < .003;
+    eyeX += (aimX - eyeX) * gazeBlend;
+    eyeY += (aimY - eyeY) * gazeBlend;
+    bodyX += (aimX - bodyX) * bodyBlend;
+    bodyY += (aimY - bodyY) * bodyBlend;
+    const settled = Math.max(Math.abs(aimX-bodyX), Math.abs(aimY-bodyY), Math.abs(aimX-eyeX), Math.abs(aimY-eyeY)) < .002;
     if (settled) {
-      headX = aimX; headY = aimY; lastTime = 0;
-      if (!headX && !headY) { rest(); return; }
+      eyeX = bodyX = aimX; eyeY = bodyY = aimY; lastTime = 0;
+      if (!aimX && !aimY) { rest(); return; }
     }
-    paint();
+    portrait.style.transform = `translate(${bodyX * .7}%, ${bodyY * .6}%) rotate(${bodyX * 3.2}deg)`;
+    paintEyes();
     if (!settled) frame = requestAnimationFrame(draw);
   }
 
@@ -303,9 +286,12 @@ function setupAstronautGaze() {
 
   function follow(event) {
     if (event.pointerType === "touch") { rest(); return; }
-    const rect = hero.getBoundingClientRect();
-    const normalize = fraction => Math.max(-1, Math.min(1, fraction * 2 - 1));
-    aim(normalize((event.clientX - rect.left) / rect.width), normalize((event.clientY - rect.top) / rect.height));
+    // Measure the stationary frame so the moving portrait never chases its own offset.
+    const rect = art.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    const x = (event.clientX - rect.left) / rect.width - .39;
+    const y = (event.clientY - rect.top) / rect.height - .37;
+    aim(Math.tanh(x / .8), Math.tanh(y / .8));
   }
 
   function sync() {
