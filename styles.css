@@ -168,7 +168,7 @@ body { isolation: isolate; padding-top: var(--header-height); }
   --header-height: clamp(64px, 9svh, 88px);
   --writer-width: clamp(150px, 14.73vw, 240px);
   --writer-gap: clamp(4px, 1vw, 16px);
-  --writer-safe: calc(var(--writer-width) * 56 / 120 + 6px + env(safe-area-inset-bottom, 0px));
+  --writer-safe: calc(var(--writer-width) * 64 / 120 + 6px + env(safe-area-inset-bottom, 0px));
   --frame: min(84%, 1240px);
   --inset: clamp(18px, 1.9vw, 32px);
   --rail-line: color-mix(in srgb, var(--ink) 7%, transparent);
@@ -460,7 +460,7 @@ body { isolation: isolate; padding-top: var(--header-height); }
   .welcome-heading h1 span { display: inline-block; }
   .welcome-zh { margin-top: 6px; font-size: 17px; }
   .enter-work { margin-top: 12px; }
-  .welcome-art { width: min(100%, 408px, max(144px, calc((100svh - 412px) * 120 / 56))); }
+  .welcome-art { width: min(100%, 408px, max(144px, calc((100svh - 412px) * 120 / 64))); }
   .welcome-quotation { width: 100%; max-width: 47ch; justify-self: start; }
   .welcome-quotation::before { display: none; }
   .welcome-quotation [lang="zh-Hans"] { font-size: 20px; line-height: 1.45; }
@@ -546,15 +546,15 @@ body { isolation: isolate; padding-top: var(--header-height); }
 }
 .pixel-writer {
   display: block;
-  aspect-ratio: 120 / 56;
+  aspect-ratio: 120 / 64;
   image-rendering: pixelated;
-  background: url("./assets/writing-studio.webp") 0 0 / 1200% 800% no-repeat;
+  background: url("./assets/writing-studio.webp?v=silver-tabby") 0 0 / 1200% 800% no-repeat;
 }
 :root[data-appearance="dark"] .pixel-writer::after {
   content: "";
   position: absolute;
   inset: 0;
-  background: url("./assets/desk-lamplight.png") center / 100% 100% no-repeat;
+  background: url("./assets/desk-lamplight.png") center top / 100% auto no-repeat;
 }
 /* Twelve frames across, eight rows. Each step moves exactly one frame. */
 @keyframes desk-columns { to { background-position-x: calc(1200% / 11); } }
