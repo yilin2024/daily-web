@@ -134,18 +134,63 @@
 .cal-week-block .cal-event-title { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: var(--title-lines); overflow: hidden; line-height: 16px; }
 .cal-week-schedule .cal-ruler span:first-child { transform: none; }
 #calendar[data-view="day"] > :is(.section-heading, .cal-toolbar, .cal-sheet) { max-width: 540px; margin-inline: auto; }
+.cal-day-halves {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: clamp(8px, 2cqw, 20px);
+  margin-top: 18px;
+}
+.cal-half { min-width: 0; }
+.cal-half h4 {
+  display: flex; align-items: baseline; gap: 6px; padding-block: 8px;
+  border-block: 1px solid var(--cal-rule); font-size: 16px; font-weight: 580;
+}
+.cal-half h4 small { color: var(--sub); font-size: 11px; font-weight: 550; letter-spacing: .06em; }
+.cal-half .cal-lanes-viewport { margin-top: 8px; }
+.cal-half .cal-timetable { grid-template-columns: 39px minmax(calc(var(--lanes) * 105px), 1fr); }
+.cal-half .cal-block .cal-task-title {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: var(--title-lines);
+  white-space: normal; line-height: 16px;
+}
+@container (max-width: 500px) {
+  .cal-half .cal-timetable { grid-template-columns: 30px minmax(calc(var(--lanes) * 98px), 1fr); }
+  .cal-half .cal-ruler { font-size: 10px; }
+  .cal-half .cal-block .cal-agenda-task { padding-inline: 3px; }
+  .cal-half .cal-block .cal-agenda-time { font-size: 10px; padding-right: 21px; }
+  .cal-half .cal-block .cal-task-title { font-size: 13px; }
+  .cal-half .cal-block .check { width: 22px; height: 22px; }
+  .cal-half .cal-block .check::before { inset: 3px; }
+}
 .cal-month-week { position: relative; }
-.cal-month-week .cal-date { margin-bottom: calc(var(--span-rows) * 23px); }
+.cal-range-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; padding: 10px 12px; border-bottom: 1px solid var(--cal-rule); }
+.cal-range-tools .secondary { font-size: 12px; padding: 5px 10px; min-height: 32px; }
+.cal-range-tools [role="status"] { color: var(--sub); font-size: 12px; }
+.cal-month-grid[data-picking] .cal-cell { cursor: crosshair; }
+#calendar .cal-month-grid[data-picking] :is(.cal-event, .cal-more) { pointer-events: none; }
+.cal-month-grid[data-picking] .cal-cell.in-range { background: color-mix(in srgb, var(--cal-red) 20%, var(--panel)); }
+.cal-cell.range-start .cal-number { box-shadow: inset 0 0 0 2px var(--cal-red); }
+.cal-month-week .cal-date { margin-bottom: calc(var(--span-rows) * 27px); }
 .cal-span-grid {
   position: absolute; inset: 34px 0 auto; display: grid; grid-template-columns: repeat(7, minmax(0,1fr));
-  grid-auto-rows: 23px; align-items: start; pointer-events: none;
+  grid-auto-rows: 27px; align-items: start; pointer-events: none;
 }
-.cal-span-grid .cal-span {
-  pointer-events: auto; min-width: 0; width: auto; margin-inline: 3px; height: 21px; padding: 1px 5px;
-  line-height: 19px; white-space: nowrap; text-overflow: ellipsis; overflow: hidden;
+#calendar .cal-span-grid .cal-span {
+  pointer-events: auto; display: flex; align-items: center; gap: 5px;
+  min-width: 0; container: range-bar / inline-size; width: auto; margin-inline: 3px;
+  height: 24px; padding: 0 6px; overflow: hidden; text-align: left;
+  border: 1px solid var(--accent); border-radius: 6px;
+  background: color-mix(in srgb, var(--accent) 37%, #fff); color: #151b20;
 }
-.cal-span.from-prior { margin-left: 0; border-top-left-radius: 0; border-bottom-left-radius: 0; }
-.cal-span.to-next { margin-right: 0; border-top-right-radius: 0; border-bottom-right-radius: 0; }
+[data-appearance="dark"] #calendar .cal-span-grid .cal-span {
+  background: color-mix(in srgb, var(--accent) 76%, #20222a); color: #11151b;
+}
+#calendar .cal-span-grid .cal-span:hover { filter: brightness(.94); }
+#calendar .cal-span-grid .from-prior { margin-left: 0; border-left: 0; border-top-left-radius: 0; border-bottom-left-radius: 0; }
+#calendar .cal-span-grid .to-next { margin-right: 0; border-right: 0; border-top-right-radius: 0; border-bottom-right-radius: 0; }
+#calendar .cal-span .cal-event-title { flex: 1; color: inherit; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; line-height: 20px; }
+.cal-span-dates { flex: none; font-size: 10px; font-variant-numeric: tabular-nums; }
+.cal-continuation { flex: none; font-size: 16px; line-height: 1; }
+@container range-bar (max-width: 175px) { .cal-span-dates { display: none; } }
 .cal-event {
   display: block;
   width: 100%;

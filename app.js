@@ -57,7 +57,7 @@ function starter() {
     task("website","Sketch the homepage layout","High",0,"In progress"),
     task("notes","Summarize this week’s reading","Medium",0,"In progress"),
     task("system","Define the color palette","Low",0),
-    task("website","Build the project gallery","Medium",2),task("notes","Outline the next research question","High",3),
+    {...task("website","Build the project gallery","Medium",2),startDate:relativeDay(0)},task("notes","Outline the next research question","High",3),
     task("system","Document button states","Medium",4),
     task("website","Choose portfolio projects","Medium",-2,"Done"),task("website","Draft the about page","Low",-1,"Done"),
     task("website","Map the site structure","Medium",-3,"Done"),task("notes","Collect reading material","Low",-2,"Done"),
@@ -251,19 +251,19 @@ function render(){
   const calendarTop = !detail && $("#welcome-navigation").dataset.section === "calendar" ? $("#calendar")?.getBoundingClientRect().top : undefined;
   const focusedTask = document.activeElement?.closest("#calendar button[data-action][data-key]");
   const focusedDay = focusedTask?.closest("[data-day]")?.dataset.day;
-  const timetableLeft = $("#calendar .cal-lanes-viewport")?.scrollLeft;
+  const focusedHalf = focusedTask?.closest("[data-half]")?.dataset.half;
+  const timetablePositions = calendarScrollPositions();
   main.innerHTML = detail ? taskPage(project) : overview() +
     '<section id="projects" class="workspace-section" tabindex="-1" aria-labelledby="projects-title"><div class="section-heading"><h2 id="projects-title">Projects</h2><button class="secondary" data-action="new-project">'+icon("plus")+'New project</button></div>'+cards(state.projects)+'</section>'+
     '<section id="tasks" class="workspace-section" tabindex="-1" aria-labelledby="tasks-title">'+taskPage(null)+'</section>'+calendarPage();
-  const timetable = main.querySelector(".cal-lanes-viewport");
-  if (timetable && timetableLeft) timetable.scrollLeft = timetableLeft;
+  restoreCalendarScroll(timetablePositions);
   if (calendarTop !== undefined) window.scrollBy({top:$("#calendar").getBoundingClientRect().top - calendarTop, behavior:"instant"});
   syncSectionNavigation();
   if (!detail && focusedTask) {
     const {action, key} = focusedTask.dataset;
     const matches = main.querySelectorAll(`#calendar button[data-action="${action}"][data-key="${key}"]`);
     const visible = Array.from(matches).filter(button => button.getClientRects().length);
-    const nextFocus = visible.find(button => button.closest("[data-day]")?.dataset.day === focusedDay) || visible[0] || main.querySelector('.cal-modes [aria-pressed="true"]');
+    const nextFocus = visible.find(button => button.closest("[data-day]")?.dataset.day === focusedDay && button.closest("[data-half]")?.dataset.half === focusedHalf) || visible[0] || main.querySelector('.cal-modes [aria-pressed="true"]');
     nextFocus.focus({preventScroll:true});
   }
   if (loadError){const error=document.createElement("p");error.className="error";error.textContent=loadError;main.prepend(error);}
@@ -344,16 +344,17 @@ function formActions(editing,label){
 function validTimeRange(start,end) {
   return !!start && (end > start || (end === "00:00" && start !== "00:00"));
 }
-function editor(kind,record,defaultDue=dayKey(),slotTime="") {
+function editor(kind,record,defaultDue=dayKey(),slotTime="",defaultStart="") {
   const formId=record?.id || "";
   let fields;
   if (kind==="task") {
     const slotEnd = slotTime ? clockLabel((clockMinutes(slotTime) + 30) % 1440) : "";
-    const range = !!record?.startDate && record.startDate !== record.due;
+    const start = record?.startDate || defaultStart;
+    const range = !!start && start !== (record?.due ?? defaultDue);
     fields=field("Task name",'<input name="title" value="'+esc(record?.title||"")+'" required maxlength="240" autofocus>')+
       field("Project",select("project",[["","Unassigned"],...state.projects.map(p=>[p.id,p.name])],record?.project??(route==="project"?projectId:"")))+
       '<label class="range-option"><input id="date-range-toggle" type="checkbox" '+(range?"checked":"")+'>跨天任务 · Multiple days</label>'+
-      '<div id="task-dates" '+(range?'class="form-pair"':'')+'><label class="field" id="task-start-date" '+(range?'':'hidden')+'>Start date · 开始日期<input name="startDate" type="date" value="'+esc(record?.startDate||record?.due||defaultDue)+'" '+(range?'required':'disabled')+'></label>'+
+      '<div id="task-dates" '+(range?'class="form-pair"':'')+'><label class="field" id="task-start-date" '+(range?'':'hidden')+'>Start date · 开始日期<input name="startDate" type="date" value="'+esc(start||record?.due||defaultDue)+'" '+(range?'required':'disabled')+'></label>'+
       field("Due date · 截止日期",'<input name="due" type="date" value="'+esc(record?.due??defaultDue)+'" '+(range?'required':'')+'>')+'</div>'+
       '<p id="range-time-hint" '+(range?'':'hidden')+'>起止日期都计入任务；如填写时间，每天使用同一时段。</p>'+
       '<div class="form-pair">'+field("Start time · 开始",'<input name="time" type="time" value="'+esc(record?.time??slotTime)+'">')+

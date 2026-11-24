@@ -636,14 +636,18 @@ body { isolation: isolate; padding-top: var(--header-height); }
 }
 /* Keep the writing and tail frames running behind the cat's expressive upper body. */
 .pixel-writer[data-cat-pose] { background-image: none; }
-.pixel-writer[data-cat-pose]::before {
+.pixel-writer::before {
   content: "";
   position: absolute;
   inset: 0;
   background: var(--desk-art) 0 0 / 1200% 800% no-repeat;
   background-position: inherit;
-  clip-path: polygon(0 0, 66.666667% 0, 66.666667% 42.96875%, 88.333333% 42.96875%, 88.333333% 0, 100% 0, 100% 100%, 0 100%);
   pointer-events: none;
+  display: none;
+}
+.pixel-writer[data-cat-pose]::before {
+  display: block;
+  clip-path: polygon(0 0, 66.666667% 0, 66.666667% 42.96875%, 88.333333% 42.96875%, 88.333333% 0, 100% 0, 100% 100%, 0 100%);
 }
 .cat-hit {
   position: absolute;
@@ -658,13 +662,41 @@ body { isolation: isolate; padding-top: var(--header-height); }
   touch-action: manipulation;
 }
 .cat-hit:focus-visible { outline: 2px dashed var(--ink); outline-offset: 0; }
-.cat-scene { position: absolute; inset: auto 0 0; width: 100%; height: auto; z-index: 1; pointer-events: none; image-rendering: pixelated; }
+.cat-tail { display: none; }
+.cat-scene { position: absolute; inset: auto auto 57.03125% 60%; width: 37.5%; height: auto; z-index: 1; pointer-events: none; image-rendering: pixelated; }
 .cat-announcement { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 /* Twelve frames across, eight rows. Each step moves exactly one frame. */
 @keyframes desk-columns { to { background-position-x: calc(1200% / 11); } }
 @keyframes desk-rows { to { background-position-y: calc(800% / 7); } }
 @media (prefers-reduced-motion: no-preference) {
   .pixel-writer { animation: desk-columns 1.44s steps(12, end) infinite, desk-rows 11.52s steps(8, end) infinite; }
+}
+/* Mix adjacent tail poses on the original 11.52-second loop. The writer keeps its own frame cadence. */
+@keyframes tail-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes tail-out { from { opacity: 1; } to { opacity: 0; } }
+@media (prefers-reduced-motion: no-preference) {
+  @supports (mix-blend-mode: plus-lighter) {
+    .pixel-writer { background-image: none; }
+    .pixel-writer::before {
+      display: block;
+      clip-path: polygon(0 0, 100% 0, 100% 42.96875%, 66.666667% 42.96875%, 66.666667% 100%, 0 100%);
+    }
+    .pixel-writer[data-cat-pose]::before { clip-path: inset(0 33.333333% 0 0); }
+    .cat-tail {
+      display: block; position: absolute; inset: 0; pointer-events: none;
+      clip-path: inset(42.96875% 0 0 66.666667%); isolation: isolate; background-position: inherit;
+    }
+    .cat-tail::before, .cat-tail::after {
+      content: ""; position: absolute; inset: 0;
+      background: var(--desk-art) 0 0 / 1200% 800% no-repeat;
+      mix-blend-mode: plus-lighter;
+    }
+    .cat-tail::before { background-position: inherit; animation: tail-out .12s linear infinite; }
+    .cat-tail::after {
+      animation: desk-columns 1.44s steps(12, end) -.12s infinite,
+        desk-rows 11.52s steps(8, end) -.12s infinite, tail-in .12s linear infinite;
+    }
+  }
 }
 @media (min-width: 851px) {
   #main, .topbar { padding-right: max(4vw, calc(var(--writer-width) + var(--writer-gap) + 12px)); }

@@ -1,6 +1,9 @@
 "use strict";
 
-let calendarView = "day";
+const requestedView = new URLSearchParams(location.search).get("view");
+let calendarView = ["week", "month"].includes(requestedView) ? requestedView : "day";
+// null while browsing, empty while choosing the first date, then the selected ISO date.
+let monthRangeStart = null;
 let calendarFullDay = false;
 let calendarDate = new Date();
 calendarDate.setHours(12, 0, 0, 0);
@@ -85,7 +88,7 @@ function calendarColor(project) {
   return project ? `--accent:var(--cal-${project.color},${palette[project.color].accent})` : "--accent:var(--cal-unassigned,var(--faint))";
 }
 
-function calendarEvent(task, projects, compact, position = "", date = task.due) {
+function calendarEvent(task, projects, compact, position = "", date = task.due, segment) {
   const project = projects.get(task.project);
   const done = task.status === "Done";
   const title = esc(task.title);
@@ -103,7 +106,7 @@ function calendarEvent(task, projects, compact, position = "", date = task.due) 
   return `<div class="${row}${done ? " is-done" : ""}" style="${style};${position}">
     <button class="check${done ? " checked" : ""}" data-action="toggle" data-key="${task.id}" role="checkbox" aria-checked="${done}" aria-label="Mark ${title} ${done ? "open" : "complete"}">${done ? icon("check") : ""}</button>
     <button class="cal-agenda-task" data-action="edit-task" data-key="${task.id}" aria-label="Edit ${description}" title="${description}">
-      ${time ? `<time class="cal-agenda-time" datetime="${date}T${task.time}">${range}</time>` : ""}
+      ${time ? `<time class="cal-agenda-time" datetime="${date}T${segment?.start || task.time}">${segment?.label || range}</time>` : ""}
       <span class="cal-task-title">${title}</span>${position ? "" : `<span class="cal-project"><i class="dot"></i>${projectName}</span>`}
     </button></div>`;
 }
@@ -118,12 +121,16 @@ function calendarDayButton(date, showWeekday = true, markers = "", count = 0) {
 }
 
 // Tasks arrive in start-time order. Only tasks in the same overlapping group share columns.
-function calendarDayBlocks(tasks) {
+function calendarDayBlocks(tasks, from = 0, until = 1440) {
   const blocks = [];
   let group, groupEnd = 0, laneEnds = [];
   for (const task of tasks) {
-    const start = clockMinutes(task.time);
-    const end = task.endTime ? (clockMinutes(task.endTime) || 1440) : start + 1;
+    const originalStart = clockMinutes(task.time);
+    const originalEnd = task.endTime ? (clockMinutes(task.endTime) || 1440) : originalStart + 1;
+    const start = Math.max(originalStart, from), end = Math.min(originalEnd, until);
+    if (end <= start) continue;
+    const segment = originalStart < from || originalEnd > until
+      ? {start:clockLabel(start), label:clockLabel(start) + "–" + clockLabel(end)} : null;
     if (!group || start >= groupEnd) {
       group = {columns: 0};
       groupEnd = end;
@@ -134,13 +141,12 @@ function calendarDayBlocks(tasks) {
     laneEnds[lane] = end;
     group.columns = laneEnds.length;
     groupEnd = Math.max(groupEnd, end);
-    blocks.push({task, start, end, lane, group});
+    blocks.push({task, start, end, lane, group, segment});
   }
   return blocks;
 }
 
-function calendarTimeAxis(blocks, weekly) {
-  let first = calendarFullDay ? 0 : 8 * 60, last = calendarFullDay ? 1440 : 18 * 60;
+function calendarTimeAxis(blocks, weekly, first = calendarFullDay ? 0 : 480, last = calendarFullDay ? 1440 : 1080) {
   const ends = new Map();
   const ticks = new Set();
   for (const block of blocks) {
@@ -171,43 +177,77 @@ function calendarLanes(day, axis, projects, weekly) {
     const value = clockLabel(minute), top = y.get(minute);
     slots.push(`<button class="cal-slot${minute % 60 ? " half-hour" : ""}" style="top:${top}px;height:${y.get(minute + 30) - top}px" data-action="new-task" data-date="${day.key}" data-time="${value}" aria-label="Add a task on ${day.key} at ${value}"><span aria-hidden="true">+ ${value}</span></button>`);
   }
-  const bookings = day.blocks.map(({task, start, end, lane, group}) => {
+  const bookings = day.blocks.map(({task, start, end, lane, group, segment}) => {
     const height = y.get(end) - y.get(start);
     const lines = Math.max(1, Math.floor((height - 24) / 16));
     const style = `top:${y.get(start)}px;height:${height}px;left:${100 * lane / group.columns}%;width:${100 / group.columns}%;--title-lines:${lines}`;
-    return calendarEvent(task, projects, weekly, style, day.key);
+    return calendarEvent(task, projects, weekly, style, day.key, segment);
   }).join("");
   return `<div class="cal-lanes" data-day="${day.key}" style="height:${height}px">${slots.join("")}${bookings}</div>`;
 }
 
-function calendarTimetable(dates, byDate, projects) {
-  const weekly = dates.length > 1;
-  const days = dates.map(date => {
-    const key = dayKey(date), tasks = byDate.get(key);
-    const blocks = calendarDayBlocks(tasks.filter(t => t.time));
-    const lanes = blocks.reduce((max, block) => Math.max(max, block.group.columns), 1);
-    return {date, key, tasks, blocks, lanes};
-  });
-  const blocks = days.flatMap(day => day.blocks);
-  const axis = calendarTimeAxis(blocks, weekly);
+function calendarRuler(axis) {
   const labels = [];
   for (let minute = axis.first; minute <= axis.last; minute += 60) {
     labels.push(`<span style="top:${axis.y.get(minute)}px">${clockLabel(minute)}</span>`);
   }
-  const minimum = weekly ? "var(--week-lane)" : "124px";
-  const tracks = days.map(day => `minmax(calc(${day.lanes} * ${minimum}),1fr)`).join(" ");
-  const headers = weekly ? '<div class="cal-week-corner"></div>' + days.map(day =>
-    `<div class="cal-week-date">${calendarDayButton(day.date)}</div>`).join("") : "";
-  const showAllDay = weekly && days.some(day => day.tasks.some(task => !task.time));
-  const allDay = showAllDay ? '<div class="cal-week-all-label">All-day</div>' + days.map(day =>
+  return `<div class="cal-ruler" aria-hidden="true">${labels.join("")}</div>`;
+}
+
+function calendarLaneCount(blocks) {
+  return blocks.reduce((max, block) => Math.max(max, block.group.columns), 1);
+}
+
+function calendarDayHalves(key, tasks, projects) {
+  const parts = [
+    {id:"am", zh:"上午", en:"AM", from:0, until:720, first:calendarFullDay ? 0 : 480, last:720},
+    {id:"pm", zh:"下午", en:"PM", from:720, until:1440, first:720, last:calendarFullDay ? 1440 : 1080}
+  ];
+  return '<div class="cal-day-halves">' + parts.map(({id, zh, en, from, until, first, last}) => {
+    const blocks = calendarDayBlocks(tasks, from, until);
+    const axis = calendarTimeAxis(blocks, false, first, last);
+    return `<section class="cal-half" data-half="${id}" aria-labelledby="cal-${id}">
+      <h4 id="cal-${id}"><span lang="zh-Hans">${zh}</span> <small>${en}</small></h4>
+      <div class="cal-lanes-viewport" tabindex="0" role="region" aria-labelledby="cal-${id}">
+      <div class="cal-timetable" style="--lanes:${calendarLaneCount(blocks)}">${calendarRuler(axis)}${calendarLanes({key, blocks}, axis, projects, false)}</div></div></section>`;
+  }).join("") + "</div>";
+}
+
+function calendarWeekGrid(dates, byDate, projects) {
+  const days = dates.map(date => {
+    const key = dayKey(date), tasks = byDate.get(key);
+    return {date, key, tasks, blocks:calendarDayBlocks(tasks.filter(t => t.time))};
+  });
+  const axis = calendarTimeAxis(days.flatMap(day => day.blocks), true);
+  const tracks = days.map(day => `minmax(calc(${calendarLaneCount(day.blocks)} * var(--week-lane)),1fr)`).join(" ");
+  const headers = '<div class="cal-week-corner"></div>' + days.map(day =>
+    `<div class="cal-week-date">${calendarDayButton(day.date)}</div>`).join("");
+  const allDay = days.some(day => day.tasks.some(task => !task.time)) ? '<div class="cal-week-all-label">All-day</div>' + days.map(day =>
     `<div class="cal-week-all" data-day="${day.key}">${day.tasks.filter(t => !t.time).map(t => calendarEvent(t, projects, true)).join("")}</div>`).join("") : "";
+  return `<div class="cal-lanes-viewport" tabindex="0" role="region" aria-label="Weekly timetable">
+    <div class="cal-timetable" style="grid-template-columns:47px ${tracks}">${headers}${allDay}
+    ${calendarRuler(axis)}${days.map(day => calendarLanes(day, axis, projects, true)).join("")}</div></div>`;
+}
+
+function calendarTimetable(dates, byDate, projects) {
+  const weekly = dates.length > 1;
+  const key = dayKey(dates[0]);
+  const hasBookings = dates.some(date => byDate.get(dayKey(date)).some(task => task.time));
   return `<section class="cal-schedule${weekly ? " cal-week-schedule" : ""}" aria-labelledby="schedule-heading">
     <div class="cal-schedule-heading"><h3 id="schedule-heading">${weekly ? 'Week timetable <small lang="zh-Hans">周课表</small>' : 'Timetable <small lang="zh-Hans">日课表</small>'}</h3>
     <button data-cal="hours" aria-pressed="${calendarFullDay}">24 hours</button></div>
-    ${blocks.length ? "" : '<p class="cal-slot-hint">点空白时段安排任务 · Select a time slot to add a task.</p>'}
-    <div class="cal-lanes-viewport" tabindex="0" role="region" aria-label="${weekly ? "Weekly" : "Daily"} timetable">
-      <div class="cal-timetable" style="grid-template-columns:47px ${tracks}">${headers}${allDay}
-      <div class="cal-ruler" aria-hidden="true">${labels.join("")}</div>${days.map(day => calendarLanes(day, axis, projects, weekly)).join("")}</div></div></section>`;
+    ${hasBookings ? "" : '<p class="cal-slot-hint">点空白时段安排任务 · Select a time slot to add a task.</p>'}
+    ${weekly ? calendarWeekGrid(dates, byDate, projects) : calendarDayHalves(key, byDate.get(key).filter(task => task.time), projects)}</section>`;
+}
+
+function calendarScrollPositions() {
+  return [...document.querySelectorAll("#calendar .cal-lanes-viewport")].map(viewport => viewport.scrollLeft);
+}
+
+function restoreCalendarScroll(positions) {
+  document.querySelectorAll("#calendar .cal-lanes-viewport").forEach((viewport, i) => {
+    if (positions[i]) viewport.scrollLeft = positions[i];
+  });
 }
 
 function calendarDayView(week, byDate, projects) {
@@ -222,37 +262,47 @@ function calendarDayView(week, byDate, projects) {
 }
 
 // Pack each week's visible slices into rows. One button spans all occupied columns.
-function calendarMonthWeek(dates, byDate, projects, month) {
+function calendarMonthWeek(dates, byDate, projects, month, previousRows) {
   const keys = dates.map(date => dayKey(date));
   const ranges = [...new Set(keys.flatMap(key => byDate.get(key).filter(spansDays)))];
   ranges.sort((a,b) => a.startDate.localeCompare(b.startDate) || b.due.localeCompare(a.due) || a.id.localeCompare(b.id));
+  // Keep a continuing task on the same line after the calendar wraps to Monday.
+  const shortDate = value => Number(value.slice(5, 7)) + "/" + Number(value.slice(8, 10));
   const rowEnds = [];
+  for (const task of ranges) {
+    if (previousRows.has(task.id)) rowEnds[previousRows.get(task.id)] = task.due >= keys[6] ? 6 : keys.indexOf(task.due);
+  }
+  const nextRows = new Map();
   const bars = ranges.map(task => {
     const first = Math.max(0, keys.indexOf(task.startDate));
     const last = task.due >= keys[6] ? 6 : keys.indexOf(task.due);
-    let row = rowEnds.findIndex(end => end < first);
+    let row = previousRows.get(task.id) ?? rowEnds.findIndex(end => end == null || end < first);
     if (row < 0) row = rowEnds.length;
     rowEnds[row] = last;
     const before = task.startDate < keys[0], after = task.due > keys[6];
+    if (after) nextRows.set(task.id, row);
     const label = esc(task.title) + " · " + task.startDate + " – " + task.due;
+    const range = shortDate(task.startDate) + "–" + shortDate(task.due);
     return `<button class="cal-event cal-span${task.status === "Done" ? " is-done" : ""}${before ? " from-prior" : ""}${after ? " to-next" : ""}" data-key="${task.id}" data-action="edit-task" title="${label}" aria-label="Edit ${label}"
-      style="${calendarColor(projects.get(task.project))};grid-column:${first + 1} / span ${last - first + 1};grid-row:${row + 1}"><span class="cal-event-title">${before ? "‹ " : ""}${esc(task.title)}${after ? " ›" : ""}</span></button>`;
+      style="${calendarColor(projects.get(task.project))};grid-column:${first + 1} / span ${last - first + 1};grid-row:${row + 1}">${before ? '<span class="cal-continuation" aria-hidden="true">‹</span>' : ""}<span class="cal-event-title">${esc(task.title)}</span><small class="cal-span-dates" aria-hidden="true">${range}</small>${after ? '<span class="cal-continuation" aria-hidden="true">›</span>' : ""}</button>`;
   }).join("");
+  previousRows.clear();
+  for (const [id, row] of nextRows) previousRows.set(id, row);
   const cells = dates.map((date,i) => {
     const key = keys[i], tasks = byDate.get(key), singles = tasks.filter(t => !spansDays(t));
     const more = singles.length - 3;
     const dots = singles.slice(0,3).map(t => `<i style="${calendarColor(projects.get(t.project))}"></i>`).join("");
-    return `<div class="cal-cell${date.getMonth() !== month ? " is-outside" : ""}${i > 4 ? " is-weekend" : ""}">
+    return `<div data-cell-date="${key}" class="cal-cell${key === monthRangeStart ? " range-start in-range" : ""}${date.getMonth() !== month ? " is-outside" : ""}${i > 4 ? " is-weekend" : ""}">
       ${calendarDayButton(date, false, `<span class="cal-dots" aria-hidden="true">${dots}</span>`, tasks.length)}
       ${singles.slice(0,3).map(t => calendarEvent(t, projects, true)).join("")}
       ${more > 0 ? `<button class="cal-more" data-cal="date" data-value="${key}" aria-label="Show all tasks on ${calendarFormats.fullDate.format(date)}">+${more} more</button>` : ""}</div>`;
   }).join("");
-  return `<div class="cal-month-week" data-day="${keys[0]}" style="--span-rows:${rowEnds.length}">${cells}<div class="cal-span-grid">${bars}</div></div>`;
+  return `<div class="cal-month-week" data-day="${keys[0]}" style="--span-rows:${rowEnds.length}">${cells}<div class="cal-span-grid"${monthRangeStart !== null ? " inert" : ""}>${bars}</div></div>`;
 }
 
 function calendarMonthView(dates, byDate, projects) {
-  const weeks = [];
-  for (let i = 0; i < dates.length; i += 7) weeks.push(calendarMonthWeek(dates.slice(i,i + 7), byDate, projects, calendarDate.getMonth()));
+  const weeks = [], continuingRows = new Map();
+  for (let i = 0; i < dates.length; i += 7) weeks.push(calendarMonthWeek(dates.slice(i,i + 7), byDate, projects, calendarDate.getMonth(), continuingRows));
   const monthDates = dates.filter(date => date.getMonth() === calendarDate.getMonth());
   const first = dayKey(monthDates[0]);
   const agenda = monthDates.map(date => {
@@ -262,8 +312,10 @@ function calendarMonthView(dates, byDate, projects) {
     return `<section><h3><button data-cal="date" data-value="${key}">${calendarFormats.dayHeading.format(date)}</button></h3>
       ${tasks.map(t => calendarEvent(t, projects, true)).join("")}</section>`;
   }).join("");
-  return `<div class="cal-month-labels" aria-hidden="true">${dates.slice(0,7).map(d => `<span>${calendarFormats.weekday.format(d)}</span>`).join("")}</div>
-    <div class="cal-month-grid">${weeks.join("")}</div><div class="cal-month-agenda">${agenda || '<p>No tasks scheduled this month.</p>'}</div>`;
+  const prompt = monthRangeStart ? "选择结束日 · Select the last day" : "选择开始日 · Select the first day";
+  return `<div class="cal-range-tools"><button class="secondary" data-cal="range" aria-pressed="${monthRangeStart !== null}">${icon(monthRangeStart === null ? "plus" : "close")}${monthRangeStart === null ? "跨天任务 · Multi-day task" : "取消 · Cancel"}</button>
+    <span role="status">${monthRangeStart !== null ? prompt : ""}</span></div><div class="cal-month-labels" aria-hidden="true">${dates.slice(0,7).map(d => `<span>${calendarFormats.weekday.format(d)}</span>`).join("")}</div>
+    <div class="cal-month-grid"${monthRangeStart !== null ? " data-picking" : ""}>${weeks.join("")}</div><div class="cal-month-agenda">${agenda || '<p>No tasks scheduled this month.</p>'}</div>`;
 }
 
 function calendarPage() {
@@ -292,15 +344,60 @@ function calendarPage() {
       </div></div></div><div class="cal-sheet">${body}</div></section>`;
 }
 
+function previewMonthRange(end) {
+  if (!monthRangeStart) return;
+  const [first, last] = [monthRangeStart, end].sort();
+  document.querySelectorAll(".cal-cell[data-cell-date]").forEach(cell => {
+    cell.classList.toggle("in-range", first <= cell.dataset.cellDate && cell.dataset.cellDate <= last);
+  });
+}
+
+for (const type of ["pointerover", "focusin"]) {
+  document.addEventListener(type, event => {
+    const cell = event.target.closest(".cal-month-grid[data-picking] [data-cell-date]");
+    if (cell) previewMonthRange(cell.dataset.cellDate);
+  });
+}
+
+function pickMonthDate(key) {
+  if (!monthRangeStart) {
+    monthRangeStart = key;
+    document.querySelector(`[data-cell-date="${key}"]`).classList.add("range-start");
+    document.querySelector(".cal-range-tools [role=status]").textContent = "选择结束日 · Select the last day";
+    previewMonthRange(key);
+    return;
+  }
+  const [first, last] = [monthRangeStart, key].sort();
+  monthRangeStart = null;
+  document.getElementById("calendar").outerHTML = calendarPage();
+  document.querySelector('[data-cal="range"]').focus({preventScroll:true});
+  editor("task", undefined, last, "", first);
+}
+
+document.addEventListener("keydown", event => {
+  if (event.key === "Escape" && monthRangeStart !== null && !document.querySelector("dialog[open]")) {
+    document.querySelector('[data-cal="range"]')?.click();
+  }
+});
+
 document.addEventListener("click", event => {
   const hit = event.target.closest("button");
   const button = hit ? hit.closest("#calendar [data-cal]") : event.target.closest("#calendar .cal-cell")?.querySelector(".cal-date");
   if (!button) return;
   const {cal, value} = button.dataset;
-  const oldLeft = document.querySelector("#calendar .cal-lanes-viewport")?.scrollLeft || 0;
-  if (cal === "view") calendarView = value;
+  const positions = calendarScrollPositions();
+  const previousView = calendarView;
+  if (cal === "range") monthRangeStart = monthRangeStart === null ? "" : null;
+  if (cal === "view") {
+    calendarView = value;
+    monthRangeStart = null;
+  }
   if (cal === "hours") calendarFullDay = !calendarFullDay;
   if (cal === "date") {
+    if (calendarView === "month" && monthRangeStart !== null) {
+      pickMonthDate(value);
+      return;
+    }
     calendarDate = new Date(value + "T12:00:00");
     calendarView = "day";
   }
@@ -311,9 +408,9 @@ document.addEventListener("click", event => {
       calendarOffset(calendarDate, step * (calendarView === "week" ? 7 : 1));
   }
   document.getElementById("calendar").outerHTML = calendarPage();
+  if (previousView === calendarView) restoreCalendarScroll(positions);
   if (calendarView === "week") {
     const viewport = document.querySelector(".cal-lanes-viewport");
-    viewport.scrollLeft = oldLeft;
     if (cal === "view" || cal === "today") {
       const dateBox = viewport.querySelector(".cal-date.is-selected").getBoundingClientRect();
       const bounds = viewport.getBoundingClientRect();
