@@ -109,6 +109,7 @@ body { isolation: isolate; padding-top: var(--header-height); }
 .weather {
   position: fixed;
   inset: 0;
+  height: 100lvh;
   z-index: -2;
   overflow: hidden;
   pointer-events: none;
@@ -175,6 +176,7 @@ body { isolation: isolate; padding-top: var(--header-height); }
   --frame: min(84%, 1240px);
   --inset: clamp(18px, 1.9vw, 32px);
   --rail-line: color-mix(in srgb, var(--ink) 7%, transparent);
+  --floating-surface: color-mix(in srgb, var(--paper) 72%, transparent);
 }
 #welcome {
   min-height: calc(100vh - var(--header-height));
@@ -183,10 +185,10 @@ body { isolation: isolate; padding-top: var(--header-height); }
   position: relative;
   isolation: isolate;
 }
-#welcome::before {
+.weather::after {
   content: "";
   position: absolute;
-  z-index: -1;
+  z-index: 2;
   inset: 0;
   pointer-events: none;
   background:
@@ -219,10 +221,10 @@ body { isolation: isolate; padding-top: var(--header-height); }
   border-bottom: 1px solid transparent;
 }
 .welcome-header[data-scrolled] {
-  background: color-mix(in srgb, var(--paper) 94%, transparent);
+  background: var(--floating-surface);
   border-bottom-color: var(--line);
-  -webkit-backdrop-filter: blur(12px);
-  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
 }
 #welcome, #overview, .workspace-section { scroll-margin-block-start: calc(var(--header-height) + 12px); }
 #sidebar { top: var(--header-height); height: calc(100dvh - var(--header-height)); }
@@ -423,7 +425,15 @@ body { isolation: isolate; padding-top: var(--header-height); }
 }
 .scroll-to-work:hover { color: var(--ink); }
 .scroll-to-work .icon { width: 14px; height: 14px; transform: rotate(90deg); }
-#workspace { border-top: 1px solid var(--line); background: color-mix(in srgb, var(--paper) 85%, transparent); }
+#workspace {
+  --workspace-panel: color-mix(in srgb, var(--panel) 36%, transparent);
+  --line: color-mix(in srgb, var(--ink) 17%, transparent);
+  border-top: 1px solid var(--line);
+  background: color-mix(in srgb, var(--paper) 14%, transparent);
+}
+#sidebar { background: color-mix(in srgb, var(--rail) 44%, transparent); }
+.workarea :is(.topbar, .project-card, .task-panel, .detail) { background: var(--workspace-panel); }
+.workarea .toolbar :is(input, select) { background-color: var(--floating-surface); }
 .workarea .hero { background: transparent; border: 0; border-radius: 0; padding-inline: 0; }
 .workarea .stats { border-inline: 0; border-radius: 0; background: transparent; }
 .primary, .filter { border-radius: 22px; }
@@ -586,8 +596,12 @@ body { isolation: isolate; padding-top: var(--header-height); }
   :root { --writer-width: 120px; }
   html { scroll-padding-bottom: var(--writer-safe); }
   #main { padding-bottom: calc(var(--writer-safe) + 24px); }
+  #sidebar, .writing-corner[data-visible] {
+    background: var(--floating-surface);
+    -webkit-backdrop-filter: blur(5px);
+    backdrop-filter: blur(5px);
+  }
   .writing-corner[data-visible] {
-    background: var(--paper);
     border-top: 1px solid var(--rail-line);
   }
 }
