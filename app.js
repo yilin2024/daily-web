@@ -79,6 +79,7 @@ function validate(data) {
   }
   for (const t of data.tasks) {
     if (!t || !validId(t.id) || taskIds.has(t.id) || !validText(t.title) || (t.project!=="" && !projectIds.has(t.project)) || !priorities.includes(t.priority) || !groups.includes(t.status) || !validDay(t.due)) throw Error("Invalid task in workspace.");
+    if (t.startDate !== undefined && t.startDate !== "" && (!validDay(t.startDate) || !t.due || t.startDate > t.due)) throw Error("Invalid task date range in workspace.");
     if (t.time !== undefined && t.time !== "" && (!t.due || !validTime(t.time))) throw Error("Invalid task time in workspace.");
     if (t.endTime !== undefined && t.endTime !== "" && (!validTime(t.endTime) || !validTimeRange(t.time,t.endTime))) throw Error("Invalid task end time in workspace.");
     taskIds.add(t.id);
@@ -249,15 +250,20 @@ function render(){
   const main=$("#main");
   const calendarTop = !detail && $("#welcome-navigation").dataset.section === "calendar" ? $("#calendar")?.getBoundingClientRect().top : undefined;
   const focusedTask = document.activeElement?.closest("#calendar button[data-action][data-key]");
+  const focusedDay = focusedTask?.closest("[data-day]")?.dataset.day;
+  const timetableLeft = $("#calendar .cal-lanes-viewport")?.scrollLeft;
   main.innerHTML = detail ? taskPage(project) : overview() +
     '<section id="projects" class="workspace-section" tabindex="-1" aria-labelledby="projects-title"><div class="section-heading"><h2 id="projects-title">Projects</h2><button class="secondary" data-action="new-project">'+icon("plus")+'New project</button></div>'+cards(state.projects)+'</section>'+
     '<section id="tasks" class="workspace-section" tabindex="-1" aria-labelledby="tasks-title">'+taskPage(null)+'</section>'+calendarPage();
+  const timetable = main.querySelector(".cal-lanes-viewport");
+  if (timetable && timetableLeft) timetable.scrollLeft = timetableLeft;
   if (calendarTop !== undefined) window.scrollBy({top:$("#calendar").getBoundingClientRect().top - calendarTop, behavior:"instant"});
   syncSectionNavigation();
   if (!detail && focusedTask) {
     const {action, key} = focusedTask.dataset;
     const matches = main.querySelectorAll(`#calendar button[data-action="${action}"][data-key="${key}"]`);
-    const nextFocus = Array.from(matches).find(button => button.getClientRects().length) || main.querySelector('.cal-modes [aria-pressed="true"]');
+    const visible = Array.from(matches).filter(button => button.getClientRects().length);
+    const nextFocus = visible.find(button => button.closest("[data-day]")?.dataset.day === focusedDay) || visible[0] || main.querySelector('.cal-modes [aria-pressed="true"]');
     nextFocus.focus({preventScroll:true});
   }
   if (loadError){const error=document.createElement("p");error.className="error";error.textContent=loadError;main.prepend(error);}
@@ -343,9 +349,13 @@ function editor(kind,record,defaultDue=dayKey(),slotTime="") {
   let fields;
   if (kind==="task") {
     const slotEnd = slotTime ? clockLabel((clockMinutes(slotTime) + 30) % 1440) : "";
+    const range = !!record?.startDate && record.startDate !== record.due;
     fields=field("Task name",'<input name="title" value="'+esc(record?.title||"")+'" required maxlength="240" autofocus>')+
       field("Project",select("project",[["","Unassigned"],...state.projects.map(p=>[p.id,p.name])],record?.project??(route==="project"?projectId:"")))+
-      field("Due date",'<input name="due" type="date" value="'+esc(record?.due??defaultDue)+'">')+
+      '<label class="range-option"><input id="date-range-toggle" type="checkbox" '+(range?"checked":"")+'>跨天任务 · Multiple days</label>'+
+      '<div id="task-dates" '+(range?'class="form-pair"':'')+'><label class="field" id="task-start-date" '+(range?'':'hidden')+'>Start date · 开始日期<input name="startDate" type="date" value="'+esc(record?.startDate||record?.due||defaultDue)+'" '+(range?'required':'disabled')+'></label>'+
+      field("Due date · 截止日期",'<input name="due" type="date" value="'+esc(record?.due??defaultDue)+'" '+(range?'required':'')+'>')+'</div>'+
+      '<p id="range-time-hint" '+(range?'':'hidden')+'>起止日期都计入任务；如填写时间，每天使用同一时段。</p>'+
       '<div class="form-pair">'+field("Start time · 开始",'<input name="time" type="time" value="'+esc(record?.time??slotTime)+'">')+
       field("End time · 结束",'<input name="endTime" type="time" value="'+esc(record?.endTime??slotEnd)+'">')+'</div>'+
       '<div class="form-pair">'+field("Priority",select("priority",priorities.map(x=>[x,x]),record?.priority||"Medium"))+
@@ -397,6 +407,11 @@ function submitRecord(event){
   for (const name of Object.keys(fields)) fields[name]=fields[name].trim();
   const name=task?"title":"name";
   if(!fields[name]){form.elements[name].setCustomValidity("Enter a name.");form.elements[name].reportValidity();return;}
+  if (task && fields.startDate && fields.startDate > fields.due) {
+    form.elements.due.setCustomValidity("The due date must be on or after the start date.");
+    form.elements.due.reportValidity();
+    return;
+  }
   if (task && fields.time && !fields.due) {
     form.elements.due.setCustomValidity("Choose a date for this time.");
     form.elements.due.reportValidity();
@@ -441,7 +456,7 @@ function handleAction(event){
       const open=document.body.classList.toggle("menu-open");$("#scrim").hidden=!open;
       $("#menu-btn").setAttribute("aria-expanded",String(open));if(open) $("#sidebar .brand").focus();else $("#menu-btn").focus();break;
     }
-    case "new-task": closeMenu();editor("task",undefined,control.closest("#calendar") ? dayKey(calendarDate) : dayKey(),control.dataset.time);break;
+    case "new-task": closeMenu();editor("task",undefined,control.dataset.date || (control.closest("#calendar") ? dayKey(calendarDate) : dayKey()),control.dataset.time);break;
     case "new-project": closeMenu();editor("project");break;
     case "edit-task": editor("task",getTask(key));break;
     case "edit-project": editor("project",getProject(key));break;
@@ -482,12 +497,23 @@ document.addEventListener("submit",submitRecord);
 document.addEventListener("input",e=>{
   if(e.target.id==="task-search"){search=e.target.value;$("#results").innerHTML=taskResults(route==="project"?getProject(projectId):null);}
   if(e.target.matches("#record-form input"))e.target.setCustomValidity("");
+  if(e.target.matches("#record-form [name=startDate]"))e.target.form.elements.due.setCustomValidity("");
   if(e.target.matches("#record-form [name=time]")){
     e.target.form.elements.due.setCustomValidity("");
     e.target.form.elements.endTime.setCustomValidity("");
   }
 });
 document.addEventListener("change",async e=>{
+  if (e.target.id==="date-range-toggle") {
+    const enabled=e.target.checked, {due,startDate}=e.target.form.elements;
+    $("#task-start-date").hidden=!enabled;
+    $("#task-dates").classList.toggle("form-pair",enabled);
+    $("#range-time-hint").hidden=!enabled;
+    startDate.disabled=!enabled;
+    startDate.required=due.required=enabled;
+    due.setCustomValidity("");
+    if (enabled) startDate.value=due.value || dayKey(calendarDate);
+  }
   if(e.target.id==="project-filter"){projectFilter=e.target.value;$("#results").innerHTML=taskResults(null);}
   if(e.target.id==="backup-file" && e.target.files[0]){
     const file=e.target.files[0];e.target.value="";

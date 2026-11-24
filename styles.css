@@ -621,17 +621,45 @@ body { isolation: isolate; padding-top: var(--header-height); }
   width: var(--writer-width);
 }
 .pixel-writer {
+  --desk-art: url("./assets/writing-studio.webp?v=charcoal-tabby");
   display: block;
   aspect-ratio: 120 / 64;
   image-rendering: pixelated;
-  background: url("./assets/writing-studio.webp?v=charcoal-tabby") 0 0 / 1200% 800% no-repeat;
+  background: var(--desk-art) 0 0 / 1200% 800% no-repeat;
 }
 :root[data-appearance="dark"] .pixel-writer::after {
   content: "";
   position: absolute;
   inset: 0;
   background: url("./assets/desk-lamplight.png") center top / 100% auto no-repeat;
+  pointer-events: none;
 }
+/* Keep the writing and tail frames running behind the cat's expressive upper body. */
+.pixel-writer[data-cat-pose] { background-image: none; }
+.pixel-writer[data-cat-pose]::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--desk-art) 0 0 / 1200% 800% no-repeat;
+  background-position: inherit;
+  clip-path: polygon(0 0, 66.666667% 0, 66.666667% 42.96875%, 88.333333% 42.96875%, 88.333333% 0, 100% 0, 100% 100%, 0 100%);
+  pointer-events: none;
+}
+.cat-hit {
+  position: absolute;
+  z-index: 2;
+  right: 2%;
+  top: 1%;
+  width: max(31%, 44px);
+  height: max(79%, 44px);
+  padding: 0;
+  border-radius: 36%;
+  pointer-events: auto;
+  touch-action: manipulation;
+}
+.cat-hit:focus-visible { outline: 2px dashed var(--ink); outline-offset: 0; }
+.cat-scene { position: absolute; inset: auto 0 0; width: 100%; height: auto; z-index: 1; pointer-events: none; image-rendering: pixelated; }
+.cat-announcement { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 /* Twelve frames across, eight rows. Each step moves exactly one frame. */
 @keyframes desk-columns { to { background-position-x: calc(1200% / 11); } }
 @keyframes desk-rows { to { background-position-y: calc(800% / 7); } }
@@ -657,3 +685,6 @@ body { isolation: isolate; padding-top: var(--header-height); }
 @media (max-height: 560px) {
   :root { --writer-width: 90px; }
 }
+
+.range-option { display: flex; align-items: center; gap: 8px; width: fit-content; color: var(--sub); font-size: 13px; cursor: pointer; }
+.range-option input { margin: 0; }

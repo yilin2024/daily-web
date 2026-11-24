@@ -6,11 +6,12 @@
   <meta name="theme-color" content="#141414">
   <meta name="description" content="Yilin’s Daily Work · 日常工作手记. A personal home for projects, tasks, and progress.">
   <link rel="icon" href="./favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles.css?v=snow-cycle">
-  <link rel="stylesheet" href="./calendar.css?v=timetable">
+  <link rel="stylesheet" href="./styles.css?v=cat-reactions">
+  <link rel="stylesheet" href="./calendar.css?v=weekly-spans">
   <title>Yilin’s Daily Work · 日常工作手记</title>
-  <script defer src="./calendar.js?v=timetable"></script>
-  <script defer src="./app.js?v=timetable-snow"></script>
+  <script defer src="./calendar.js?v=weekly-spans"></script>
+  <script defer src="./app.js?v=date-ranges"></script>
+  <script defer src="./cat.js?v=1"></script>
 </head>
 <body>
   <div class="weather" aria-hidden="true"><div class="sunlight"></div><div class="rain" id="rain"></div><div class="snow" id="snow"></div></div>
@@ -41,7 +42,9 @@
           <p class="welcome-zh" lang="zh-Hans">Yilin 的日常工作</p>
           <a class="enter-work" href="#overview">Enter workspace <span lang="zh-Hans">进入工作台</span><i data-icon="arrow"></i></a>
         </div>
-        <div class="welcome-art pixel-writer" role="img" aria-label="A writer in a pale yellow sweater sits at a tall wooden desk. A black, gray and white Maine Coon sways its fluffy tail over the edge."></div>
+        <div class="welcome-art pixel-writer" role="group" aria-label="A writer in a pale yellow sweater sits at a tall wooden desk with a black, gray and white Maine Coon.">
+          <button type="button" class="cat-hit" aria-label="和猫咪互动 · Play with the cat" title="点点猫咪 · Play with the cat"></button>
+        </div>
         <blockquote class="welcome-quotation">
           <p lang="zh-Hans">日积跬步，终至千里</p>
           <p lang="en">A step with every dawn,<br>till a thousand miles lie behind.</p>
@@ -78,7 +81,8 @@
       <main id="main" tabindex="-1"></main>
     </div>
   </div>
-  <div class="writing-corner" aria-hidden="true"><span class="pixel-writer"></span></div>
+  <div class="writing-corner"><div class="pixel-writer"><button type="button" class="cat-hit" aria-label="和猫咪互动 · Play with the cat" title="点点猫咪 · Play with the cat"></button></div></div>
+  <span class="cat-announcement" lang="zh-Hans" role="status" aria-live="polite"></span>
   <dialog id="editor" aria-labelledby="dialog-title"></dialog>
   <div id="message" role="status" aria-live="polite"></div>
   <noscript>Enable JavaScript to open the workspace. <span lang="zh-Hans">请启用 JavaScript 进入工作台。</span></noscript>
