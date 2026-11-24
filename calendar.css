@@ -4,7 +4,7 @@
   --cal-rule: color-mix(in srgb, var(--ink) 12%, transparent);
   --cal-wash: color-mix(in srgb, var(--ink) 3%, transparent);
   container-type: inline-size;
-  scroll-margin-top: calc(var(--header-height) + 10px);
+  min-height: calc(100svh - var(--header-height) - 12px);
 }
 [data-appearance="light"] #calendar { --cal-red: #ad3032; }
 .cal-toolbar, .cal-controls, .cal-pager, .cal-modes, .cal-agenda-heading {
@@ -12,7 +12,8 @@
   align-items: center;
 }
 .cal-toolbar { justify-content: space-between; flex-wrap: wrap; gap: 14px 22px; margin: 8px 0 22px; }
-.cal-toolbar h1 {
+#calendar-title small { color: var(--sub); font-size: .58em; font-weight: 450; }
+.cal-period {
   font-size: clamp(29px, 3.2vw, 48px);
   font-weight: 540;
   line-height: 1.12;
@@ -146,7 +147,7 @@
   .cal-cell > .cal-event, .cal-cell > .cal-more { display: none; }
   .cal-cell .cal-date { width: 100%; height: 100%; gap: 2px; }
   .cal-cell .cal-dots { display: flex; justify-content: center; gap: 2px; height: 4px; }
-  .cal-dots i { width: 4px; height: 4px; border-radius: 50%; }
+  .cal-dots i { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
   .cal-month-labels span { text-align: center; }
   .cal-month-agenda { display: grid; gap: 18px; padding: 17px 12px; border-top: 1px solid var(--cal-rule); }
   .cal-month-agenda section { display: grid; gap: 4px; }
@@ -155,3 +156,35 @@
   .cal-month-agenda .cal-event { padding: 7px; }
   .cal-month-agenda > p { color: var(--sub); }
 }
+
+[data-appearance="dark"] #calendar {
+  --cal-moss: #77e59b;
+  --cal-clay: #ffa37c;
+  --cal-iris: #c7a5ff;
+  --cal-lake: #76ceff;
+  --cal-ochre: #ffda73;
+  --cal-unassigned: #c2c9d4;
+}
+[data-appearance="dark"] #calendar :is(.cal-event, .cal-agenda-row) {
+  --event-fill: color-mix(in srgb, var(--accent) 23%, #18191e);
+  --event-detail: color-mix(in srgb, var(--accent) 45%, #f4f4f7);
+  background-color: var(--event-fill);
+  color: #fafafd;
+}
+[data-appearance="dark"] .cal-agenda-row {
+  margin-top: 5px;
+  border: 0;
+  border-inline-start: 3px solid var(--accent);
+  border-radius: 6px;
+  padding-inline-end: 10px;
+}
+[data-appearance="dark"] #calendar .cal-event:hover {
+  background-color: color-mix(in srgb, var(--accent) 32%, #18191e);
+}
+[data-appearance="dark"] #calendar :is(.cal-time, .cal-project, .cal-agenda-time) {
+  color: var(--event-detail);
+}
+[data-appearance="dark"] #calendar .is-done :is(.cal-event-title, .cal-task-title) {
+  color: var(--event-detail);
+}
+[data-appearance="dark"] .cal-agenda-row .check:not(.checked)::before { border-color: var(--accent); }

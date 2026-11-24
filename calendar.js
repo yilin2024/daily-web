@@ -55,6 +55,10 @@ function calendarTaskDates() {
   return byDate;
 }
 
+function calendarColor(project) {
+  return project ? `--accent:var(--cal-${project.color},${palette[project.color].accent})` : "--accent:var(--cal-unassigned,var(--faint))";
+}
+
 function calendarEvent(task, projects, compact) {
   const project = projects.get(task.project);
   const done = task.status === "Done";
@@ -62,7 +66,7 @@ function calendarEvent(task, projects, compact) {
   const time = task.time ? calendarTime(task.time) : "";
   const projectName = esc(project?.name || "Unassigned");
   const description = [done ? "Completed" : "", time, title, projectName].filter(Boolean).join(" · ");
-  const style = project ? theme(project.color) : "--accent:var(--faint)";
+  const style = calendarColor(project);
   if (compact) {
     return `<button class="cal-event${done ? " is-done" : ""}" style="${style}" data-action="edit-task" data-key="${task.id}" title="${description}" aria-label="Edit ${description}">
       ${time ? `<span class="cal-time">${time}</span>` : ""}<span class="cal-event-title">${title}</span></button>`;
@@ -121,7 +125,7 @@ function calendarMonthView(byDate, projects) {
       const more = tasks.length - 3;
       const dots = tasks.slice(0, 3).map(t => {
         const project = projects.get(t.project);
-        return `<i style="background:${project ? palette[project.color].accent : "var(--faint)"}"></i>`;
+        return `<i style="${calendarColor(project)}"></i>`;
       }).join("");
       return `<div class="cal-cell${date.getMonth() !== first.getMonth() ? " is-outside" : ""}${i % 7 > 4 ? " is-weekend" : ""}">
         ${calendarDayButton(date, false, `<span class="cal-dots" aria-hidden="true">${dots}</span>`, tasks.length)}${tasks.slice(0, 3).map(t => calendarEvent(t, projects, true)).join("")}
@@ -142,8 +146,10 @@ function calendarPage() {
   const body = calendarView === "month" ? calendarMonthView(byDate, projects) :
     calendarView === "week" ? calendarWeekView(week, byDate, projects) :
     calendarDayView(week, byDate.get(dayKey(calendarDate)) || [], projects);
-  return `<section id="calendar" aria-label="Calendar / 日历">
-    <div class="cal-toolbar"><h1 aria-live="polite">${period}</h1>
+  return `<section id="calendar" class="workspace-section" tabindex="-1" aria-labelledby="calendar-title">
+    <div class="section-heading"><h2 id="calendar-title">Calendar <small lang="zh-Hans">日历</small></h2>
+      <button class="secondary" data-action="new-task">${icon("plus")}New task</button></div>
+    <div class="cal-toolbar"><h3 class="cal-period" aria-live="polite">${period}</h3>
       <div class="cal-controls"><div class="cal-modes" role="group" aria-label="Calendar view">${modes.map(([key, label, zh]) =>
         `<button data-cal="view" data-value="${key}" aria-pressed="${calendarView === key}">${label} <small lang="zh-Hans">${zh}</small></button>`).join("")}</div>
       <div class="cal-pager" role="group" aria-label="Calendar navigation">

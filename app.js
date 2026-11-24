@@ -145,7 +145,7 @@ function setRoute(navigating = false){
   route=nextRoute;projectId=key||"";closeMenu();
   document.title = route === "welcome" ? "Yilin’s Daily Work · 日常工作手记" :
     (route === "project" ? getProject(projectId).name : sectionTitles[route]) + " · Yilin’s Daily Work";
-  if (!navigating || previous === "project" || route === "project" || previous === "calendar" || route === "calendar" || previousFilter !== taskFilter || (changed && hadQuery)) render();
+  if (!navigating || previous === "project" || route === "project" || previousFilter !== taskFilter || (changed && hadQuery)) render();
 }
 function applyAppearance(value) {
   const light = value === "light";
@@ -187,9 +187,8 @@ function syncSectionNavigation() {
   const header = $(".welcome-header");
   const nav = $("#welcome-navigation");
   const detail = route === "project";
-  const standalone = detail || route === "calendar";
-  let section = detail ? "projects" : route === "calendar" ? "calendar" : "welcome";
-  if (!standalone) {
+  let section = detail ? "projects" : "welcome";
+  if (!detail) {
     // Use the same landing line as the anchors, including room below the pinned header.
     const landingLine = header.offsetHeight + 14;
     for (const link of sectionLinks.slice(1)) {
@@ -197,8 +196,8 @@ function syncSectionNavigation() {
       if (target && target.getBoundingClientRect().top <= landingLine) section = target.id;
     }
   }
-  cornerDesk.toggleAttribute("data-visible", standalone || heroDesk.getBoundingClientRect().bottom <= header.offsetHeight);
-  const scrolled = standalone || window.scrollY > 8;
+  cornerDesk.toggleAttribute("data-visible", detail || heroDesk.getBoundingClientRect().bottom <= header.offsetHeight);
+  const scrolled = detail || window.scrollY > 8;
   if (header.hasAttribute("data-scrolled") !== scrolled) header.toggleAttribute("data-scrolled", scrolled);
   if (nav.dataset.section !== section) {
     nav.dataset.section = section;
@@ -226,7 +225,7 @@ function syncSectionNavigation() {
 }
 
 function scrollToRoute(behavior = "auto", focus = true) {
-  const standalone = route === "project" || route === "calendar";
+  const standalone = route === "project";
   const target = standalone ? $("#overview") : document.getElementById(route);
   target.scrollIntoView({block:"start", behavior});
   if (focus) (route === "welcome" ? $("#welcome-main") : standalone ? $("#main") : target).focus({preventScroll:true});
@@ -237,7 +236,7 @@ function render(){
   const detail = route === "project";
   const project = detail ? getProject(projectId) : null;
   if (detail && !project) { location.hash = "projects"; return; }
-  $("#welcome").hidden = detail || route === "calendar";
+  $("#welcome").hidden = detail;
   $("#workspace").hidden = false;
   $(".skip").href = route === "welcome" ? "#welcome-main" : "#main";
   renderWelcome();
@@ -245,14 +244,16 @@ function render(){
   $("#project-nav").innerHTML=state.projects.map(p=>'<a class="project-link '+(project?.id===p.id?"active":"")+'" href="#project/'+p.id+'" style="'+theme(p.color)+'"><span class="dot"></span><span>'+esc(p.name)+'</span></a>').join("");
   $("#workspace-type").textContent = state.projects.some(p=>p.sample) || state.tasks.some(t=>t.sample) ? "Sample workspace" : "Saved in this browser";
   const main=$("#main");
-  const focusedTask = document.activeElement.closest("#calendar button[data-action][data-key]");
-  main.innerHTML = route === "calendar" ? calendarPage() : detail ? taskPage(project) : overview() +
+  const calendarTop = !detail && $("#welcome-navigation").dataset.section === "calendar" ? $("#calendar")?.getBoundingClientRect().top : undefined;
+  const focusedTask = document.activeElement?.closest("#calendar button[data-action][data-key]");
+  main.innerHTML = detail ? taskPage(project) : overview() +
     '<section id="projects" class="workspace-section" tabindex="-1" aria-labelledby="projects-title"><div class="section-heading"><h2 id="projects-title">Projects</h2><button class="secondary" data-action="new-project">'+icon("plus")+'New project</button></div>'+cards(state.projects)+'</section>'+
-    '<section id="tasks" class="workspace-section" tabindex="-1" aria-labelledby="tasks-title">'+taskPage(null)+'</section>';
+    '<section id="tasks" class="workspace-section" tabindex="-1" aria-labelledby="tasks-title">'+taskPage(null)+'</section>'+calendarPage();
+  if (calendarTop !== undefined) window.scrollBy({top:$("#calendar").getBoundingClientRect().top - calendarTop, behavior:"instant"});
   syncSectionNavigation();
-  if (route === "calendar" && focusedTask) {
+  if (!detail && focusedTask) {
     const {action, key} = focusedTask.dataset;
-    const matches = main.querySelectorAll(`button[data-action="${action}"][data-key="${key}"]`);
+    const matches = main.querySelectorAll(`#calendar button[data-action="${action}"][data-key="${key}"]`);
     const nextFocus = Array.from(matches).find(button => button.getClientRects().length) || main.querySelector('.cal-modes [aria-pressed="true"]');
     nextFocus.focus({preventScroll:true});
   }
@@ -331,13 +332,13 @@ function select(name,values,selected){return '<select name="'+name+'">'+options(
 function formActions(editing,label){
   return '<div class="dialog-actions">'+(editing?'<button class="delete" type="button" data-action="delete">Delete</button>':'')+'<button type="button" class="secondary" data-action="close">Cancel</button><button class="primary" type="submit">'+label+'</button></div>';
 }
-function editor(kind,record) {
+function editor(kind,record,defaultDue=dayKey()) {
   const formId=record?.id || "";
   let fields;
   if (kind==="task") {
     fields=field("Task name",'<input name="title" value="'+esc(record?.title||"")+'" required maxlength="240" autofocus>')+
       field("Project",select("project",[["","Unassigned"],...state.projects.map(p=>[p.id,p.name])],record?.project??(route==="project"?projectId:"")))+
-      '<div class="form-pair">'+field("Due date",'<input name="due" type="date" value="'+esc(record?.due??(route==="calendar"?dayKey(calendarDate):dayKey()))+'">')+
+      '<div class="form-pair">'+field("Due date",'<input name="due" type="date" value="'+esc(record?.due??defaultDue)+'">')+
       field("Time (optional)",'<input name="time" type="time" value="'+esc(record?.time||"")+'">')+'</div>'+
       '<div class="form-pair">'+field("Priority",select("priority",priorities.map(x=>[x,x]),record?.priority||"Medium"))+
       field("Status",select("status",groups.map(x=>[x,x]),record?.status||"To do"))+'</div>';
@@ -427,7 +428,7 @@ function handleAction(event){
       const open=document.body.classList.toggle("menu-open");$("#scrim").hidden=!open;
       $("#menu-btn").setAttribute("aria-expanded",String(open));if(open) $("#sidebar .brand").focus();else $("#menu-btn").focus();break;
     }
-    case "new-task": closeMenu();editor("task");break;
+    case "new-task": closeMenu();editor("task",undefined,control.closest("#calendar") ? dayKey(calendarDate) : dayKey());break;
     case "new-project": closeMenu();editor("project");break;
     case "edit-task": editor("task",getTask(key));break;
     case "edit-project": editor("project",getProject(key));break;
@@ -456,8 +457,8 @@ document.addEventListener("click", event => {
   const link = event.target.closest("a[href]");
   if (!link) return;
   if (link.closest("#sidebar, #welcome-navigation")) closeMenu();
-  // Filtered task shortcuts share one section and can be selected again after scrolling.
-  if (link.hash.startsWith("#tasks/") && location.hash === link.hash &&
+  // Re-selecting the current hash after manual scrolling should land on its section again.
+  if ((link.closest("#sidebar, #welcome-navigation") || link.hash.startsWith("#tasks/")) && location.hash === link.hash &&
       !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) {
     event.preventDefault();
     setRoute(true);
