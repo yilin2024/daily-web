@@ -6,6 +6,7 @@ const paths = {
   tasks:'<rect x="4" y="4" width="16" height="17" rx="3"/><path d="m8 12 3 3 5-6"/>',
   folder:'<path d="M3 7V5a1 1 0 0 1 1-1h5l3 3h8a1 1 0 0 1 1 1v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>',
   calendar:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v5m10-5v5M3 11h18"/>',
+  repeat:'<path d="M4 10a8 8 0 1 1 1 7M4 4v6h6"/>',
   chart:'<path d="M4 20h16M6 16v-4m6 4V8m6 8V4"/>',
   check:'<path d="m5 12 4.5 4.5L19 7"/>',
   complete:'<circle cx="12" cy="12" r="9"/><path d="m8 12 2.5 2.5L16 9"/>',
@@ -50,6 +51,50 @@ const sampleProjects = [
   ["notes","Research notebook","Organize reading notes and open questions.","clay","book"],
   ["system","Design system","Build a reusable library of components.","iris","layers"]
 ];
+const suggestedTags = ["Research", "Paper reading"];
+const cleanTag = name => name.normalize("NFKC").trim().replace(/\s+/gu, " ");
+const tagKey = name => cleanTag(name).toLowerCase();
+
+function uniqueTags(names) {
+  const seen = new Map();
+  for (const name of names) {
+    const key = tagKey(name);
+    if (key && !seen.has(key)) seen.set(key, cleanTag(name));
+  }
+  return [...seen.values()];
+}
+
+function workspaceTags() {
+  return uniqueTags([...suggestedTags, ...(state.tags || []), ...state.tasks.flatMap(task => task.tags || [])])
+    .sort((a, b) => a.localeCompare(b));
+}
+
+function validTags(names) {
+  return Array.isArray(names) && names.every(name => typeof name === "string" && cleanTag(name).length > 0 && cleanTag(name).length <= 60);
+}
+
+function recordStatus(task, status, previous) {
+  if (status === "Done" && previous?.status !== "Done") task.completedAt = new Date().toISOString();
+  else if (status === "Done" && previous?.completedAt) task.completedAt = previous.completedAt;
+  else delete task.completedAt;
+  task.status = status;
+}
+
+function tagTone(name) {
+  let hash = 0;
+  for (const char of tagKey(name)) hash = (hash * 31 + char.codePointAt(0)) >>> 0;
+  return hash % 5;
+}
+
+function tagChips(tags, links = false) {
+  if (!tags?.length) return "";
+  return '<span class="tag-list">' + uniqueTags(tags).map(name => {
+    const attrs = `class="tag-chip" data-tone="${tagTone(name)}"`;
+    return links ? `<a ${attrs} href="#completed/tag/${encodeURIComponent(tagKey(name))}" aria-label="已完成 · ${esc(name)}">#${esc(name)}</a>`
+      : `<span ${attrs}>#${esc(name)}</span>`;
+  }).join("") + "</span>";
+}
+
 function starter() {
   const projects = sampleProjects.map(([id,name,description,color,icon]) => ({id,name,description,color,icon,sample:true}));
   const task = (project,title,priority,due,status="To do") => ({id:id(),project,title,priority,due:relativeDay(due),status,sample:true});
@@ -72,6 +117,7 @@ function validate(data) {
   const validDay = value => value === "" || (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) && dayKey(new Date(value+"T12:00:00"))===value);
   const validTime = value => typeof value === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
   if (!data || data.version!==1 || !Array.isArray(data.projects) || !Array.isArray(data.tasks)) throw Error("Unsupported workspace format.");
+  if (data.tags !== undefined && !validTags(data.tags)) throw Error("Invalid workspace tags.");
   const projectIds = new Set(), taskIds = new Set();
   for (const p of data.projects) {
     if (!p || !validId(p.id) || projectIds.has(p.id) || !validText(p.name) || typeof p.description!=="string" || !Object.hasOwn(palette,p.color) || !Object.hasOwn(iconNames,p.icon)) throw Error("Invalid project in workspace.");
@@ -82,6 +128,8 @@ function validate(data) {
     if (t.startDate !== undefined && t.startDate !== "" && (!validDay(t.startDate) || !t.due || t.startDate > t.due)) throw Error("Invalid task date range in workspace.");
     if (t.time !== undefined && t.time !== "" && (!t.due || !validTime(t.time))) throw Error("Invalid task time in workspace.");
     if (t.endTime !== undefined && t.endTime !== "" && (!validTime(t.endTime) || !validTimeRange(t.time,t.endTime))) throw Error("Invalid task end time in workspace.");
+    if (t.tags !== undefined && !validTags(t.tags)) throw Error("Invalid task tags.");
+    if (t.completedAt !== undefined && (typeof t.completedAt !== "string" || !/^\d{4}-\d{2}-\d{2}T/.test(t.completedAt) || !Number.isFinite(Date.parse(t.completedAt)))) throw Error("Invalid completion date.");
     taskIds.add(t.id);
   }
   return data;
@@ -116,6 +164,7 @@ function save(next, allowRestore=false) {
   } catch (e) { alert("Could not save. "+e.message); return false; }
 }
 let route="welcome", projectId="", taskFilter="Open", focusFilter="Today", projectFilter="All", search="", toastTimer;
+let historyTag = "";
 const appearanceKey = storageKey + ":appearance";
 const rainKey = storageKey + ":rain";
 const dialog = $("#editor");
@@ -136,10 +185,17 @@ function notify(message) {
 function setRoute(navigating = false){
   const previous = route;
   const previousFilter = taskFilter;
-  const [page,key] = location.hash.slice(1).split("/");
+  const [page,key,encodedTag] = location.hash.slice(1).split("/");
+  const previousTag = historyTag;
+  if (page === "completed") {
+    historyTag = key === "untagged" ? "untagged" : "";
+    if (key === "tag" && encodedTag) {
+      try { historyTag = "tag/" + tagKey(decodeURIComponent(encodedTag)); } catch { /* Show all completions for an incomplete link. */ }
+    }
+  }
   let nextRoute = "welcome";
   if (page === "project" && getProject(key)) nextRoute = "project";
-  else if (["overview", "tasks", "projects", "calendar"].includes(page)) nextRoute = page;
+  else if (["overview", "tasks", "projects", "calendar", "completed"].includes(page)) nextRoute = page;
   const changed = nextRoute !== route || (key || "") !== projectId;
   const hadQuery = projectFilter !== "All" || search !== "";
   if (changed) {taskFilter="Open";projectFilter="All";search="";}
@@ -148,7 +204,7 @@ function setRoute(navigating = false){
   route=nextRoute;projectId=key||"";closeMenu();
   document.title = route === "welcome" ? "Yilin’s Daily Work · 日常工作手记" :
     (route === "project" ? getProject(projectId).name : sectionTitles[route]) + " · Yilin’s Daily Work";
-  if (!navigating || previous === "project" || route === "project" || previousFilter !== taskFilter || (changed && hadQuery)) render();
+  if (!navigating || previous === "project" || route === "project" || previousFilter !== taskFilter || previousTag !== historyTag || (changed && hadQuery)) render();
 }
 function applyAppearance(value) {
   const light = value === "light";
@@ -185,7 +241,7 @@ const sectionLinks = Array.from(document.querySelectorAll("#welcome-navigation a
 const sidebarLinks = Array.from(document.querySelectorAll("#nav a"));
 const heroDesk = $(".welcome-art");
 const cornerDesk = $(".writing-corner");
-const sectionTitles = {welcome:"Home", overview:"Overview", projects:"Projects", tasks:"My tasks", calendar:"Calendar"};
+const sectionTitles = {welcome:"Home", overview:"Overview", projects:"Projects", tasks:"My tasks", calendar:"Calendar", completed:"Completed"};
 
 function syncSectionNavigation() {
   const header = $(".welcome-header");
@@ -248,16 +304,19 @@ function render(){
   $("#project-nav").innerHTML=state.projects.map(p=>'<a class="project-link '+(project?.id===p.id?"active":"")+'" href="#project/'+p.id+'" style="'+theme(p.color)+'"><span class="dot"></span><span>'+esc(p.name)+'</span></a>').join("");
   $("#workspace-type").textContent = state.projects.some(p=>p.sample) || state.tasks.some(t=>t.sample) ? "Sample workspace" : "Saved in this browser";
   const main=$("#main");
-  const calendarTop = !detail && $("#welcome-navigation").dataset.section === "calendar" ? $("#calendar")?.getBoundingClientRect().top : undefined;
+  const activeSection = $("#welcome-navigation").dataset.section;
+  const anchoredId = !detail && ["calendar","completed"].includes(activeSection) ? activeSection : "";
+  const previousTop = anchoredId ? document.getElementById(anchoredId)?.getBoundingClientRect().top : undefined;
+  const historyFocus = document.activeElement?.closest("#completed [data-action][data-key]");
   const focusedTask = document.activeElement?.closest("#calendar button[data-action][data-key]");
   const focusedDay = focusedTask?.closest("[data-day]")?.dataset.day;
   const focusedHalf = focusedTask?.closest("[data-half]")?.dataset.half;
   const timetablePositions = calendarScrollPositions();
   main.innerHTML = detail ? taskPage(project) : overview() +
     '<section id="projects" class="workspace-section" tabindex="-1" aria-labelledby="projects-title"><div class="section-heading"><h2 id="projects-title">Projects</h2><button class="secondary" data-action="new-project">'+icon("plus")+'New project</button></div>'+cards(state.projects)+'</section>'+
-    '<section id="tasks" class="workspace-section" tabindex="-1" aria-labelledby="tasks-title">'+taskPage(null)+'</section>'+calendarPage();
+    '<section id="tasks" class="workspace-section" tabindex="-1" aria-labelledby="tasks-title">'+taskPage(null)+'</section>'+calendarPage()+completedPage();
   restoreCalendarScroll(timetablePositions);
-  if (calendarTop !== undefined) window.scrollBy({top:$("#calendar").getBoundingClientRect().top - calendarTop, behavior:"instant"});
+  if (previousTop !== undefined) window.scrollBy({top:document.getElementById(anchoredId).getBoundingClientRect().top - previousTop, behavior:"instant"});
   syncSectionNavigation();
   if (!detail && focusedTask) {
     const {action, key} = focusedTask.dataset;
@@ -265,6 +324,11 @@ function render(){
     const visible = Array.from(matches).filter(button => button.getClientRects().length);
     const nextFocus = visible.find(button => button.closest("[data-day]")?.dataset.day === focusedDay && button.closest("[data-half]")?.dataset.half === focusedHalf) || visible[0] || main.querySelector('.cal-modes [aria-pressed="true"]');
     nextFocus.focus({preventScroll:true});
+  }
+  if (!detail && historyFocus) {
+    const {action, key} = historyFocus.dataset;
+    const focus = main.querySelector(`#completed [data-action="${action}"][data-key="${key}"]`) || $("#history-tag");
+    focus.focus({preventScroll:true});
   }
   if (loadError){const error=document.createElement("p");error.className="error";error.textContent=loadError;main.prepend(error);}
 }
@@ -277,14 +341,17 @@ function cards(projects){
   }).join("")+'</div>';
 }
 function sectionHead(title,url,label){return '<div class="section-heading"><h2>'+title+'</h2><a class="text-btn" href="#'+url+'">'+label+icon("arrow")+'</a></div>';}
-function metric(n,label,symbol,color){return '<div class="stat" style="'+theme(color)+'"><span class="stat-icon">'+icon(symbol)+'</span><div><div class="stat-number">'+n+'</div><div class="metric-name">'+label+'</div></div></div>';}
+function metric(n,label,symbol,color,href){
+  const content = `<span class="stat-icon">${icon(symbol)}</span><div><div class="stat-number">${n}</div><div class="metric-name">${label}</div></div>`;
+  return href ? `<a class="stat" href="${href}" style="${theme(color)}">${content}</a>` : `<div class="stat" style="${theme(color)}">${content}</div>`;
+}
 function overview(){
   const open=state.tasks.filter(t=>t.status!=="Done"), due=open.filter(t=>t.due===dayKey()), completed=state.tasks.length-open.length;
   const active=state.projects.filter(p=>progress(p).status!=="Complete").length;
   const date=new Date().toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"});
   const intro=due.length ? plural(due.length,"task")+' due today. '+plural(active,"active project")+' in your workspace.' : 'Nothing due today. '+plural(open.length,"open task")+' in your workspace.';
   return '<section class="hero"><div class="hero-copy"><div class="date-label">'+icon("sun")+date+'</div><h1>Workspace overview</h1><p>'+intro+'</p></div></section>'+
-    '<div class="stats">'+metric(active,"Active projects","folder","moss")+metric(open.length,"Open tasks","tasks","clay")+metric(completed,"Completed tasks","complete","iris")+metric((state.tasks.length?Math.round(completed/state.tasks.length*100):0)+"%","Overall progress","chart","lake")+'</div>'+
+    '<div class="stats">'+metric(active,"Active projects","folder","moss")+metric(open.length,"Open tasks","tasks","clay")+metric(completed,"Completed tasks","complete","iris","#completed")+metric((state.tasks.length?Math.round(completed/state.tasks.length*100):0)+"%","Overall progress","chart","lake")+'</div>'+
     '<section class="section">'+sectionHead("Task focus","tasks","All tasks")+'<div class="task-panel">'+tabs(["Today","Upcoming","Overdue"],focusFilter,"focus")+rows(filtered(open,focusFilter))+'</div></section>';
 }
 function tabs(names,selected,action){
@@ -306,7 +373,7 @@ function rows(tasks){
   return tasks.map(t=>{
     const p=getProject(t.project), done=t.status==="Done", today=dayKey();
     const due=t.due===today?"Today":t.due===relativeDay(1)?"Tomorrow":t.due?new Date(t.due+"T12:00:00").toLocaleDateString("en-US",{month:"short",day:"numeric",...(t.due.slice(0,4)!==today.slice(0,4)?{year:"numeric"}:{})}):"No date";
-    return '<div class="task-row '+(done?"finished":"")+'"><button class="check '+(done?"checked":"")+'" role="checkbox" aria-checked="'+done+'" aria-label="Mark '+esc(t.title)+(done?' open':' complete')+'" data-action="toggle" data-key="'+t.id+'">'+(done?icon("check"):"")+'</button><button class="task-name" data-action="edit-task" data-key="'+t.id+'">'+esc(t.title)+'</button>'+
+    return '<div class="task-row '+(done?"finished":"")+'"><button class="check '+(done?"checked":"")+'" role="checkbox" aria-checked="'+done+'" aria-label="Mark '+esc(t.title)+(done?' open':' complete')+'" data-action="toggle" data-key="'+t.id+'">'+(done?icon("check"):"")+'</button><div class="task-summary"><button class="task-name" data-action="edit-task" data-key="'+t.id+'">'+esc(t.title)+'</button>'+tagChips(t.tags,true)+'</div>'+
     (p?'<a class="task-project" style="'+theme(p.color)+'" href="#project/'+p.id+'"><span class="dot"></span><span class="truncate">'+esc(p.name)+'</span></a>':'<span class="task-project">Unassigned</span>')+
     '<span class="priority p-'+t.priority.toLowerCase()+'">'+t.priority+'</span><span class="due '+(!done&&t.due&&t.due<today?"late":"")+'">'+icon("calendar")+due+'</span></div>';
   }).join("");
@@ -318,7 +385,7 @@ function taskResults(project){
   const selected = project?project.id:projectFilter;
   const query = search.toLocaleLowerCase();
   const matches = filtered(state.tasks.filter(task =>
-    (selected === "All" || task.project === selected) && task.title.toLocaleLowerCase().includes(query)
+    (selected === "All" || task.project === selected) && (task.title.toLocaleLowerCase().includes(query) || task.tags?.some(tag => tagKey(tag).includes(query)))
   ), taskFilter);
   return '<p class="result-count" role="status">'+plural(matches.length,"task")+'</p>'+rows(matches);
 }
@@ -329,6 +396,69 @@ function taskPage(project){
     heading='<div class="page-heading"><h1>'+esc(project.name)+'</h1><button class="secondary" data-action="edit-project" data-key="'+project.id+'">'+icon("pencil")+'Edit project</button></div><div class="detail" style="'+theme(project.color)+'">'+statusPill(status)+'<div class="card-foot"><p>'+esc(project.description)+'</p><strong>'+percent+'%</strong></div><div class="track"><span style="width:'+percent+'%"></span></div><div class="card-foot">'+done+' of '+plural(tasks.length,"task")+' done</div></div><div class="section-heading"><h2>Project tasks</h2></div>';
   }
   return heading+'<div class="toolbar"><input id="task-search" type="search" placeholder="Search tasks…" aria-label="Search tasks" value="'+esc(search)+'">'+(project?'':'<select id="project-filter" aria-label="Filter by project">'+options([["All","All projects"],["","Unassigned"],...state.projects.map(p=>[p.id,p.name])],projectFilter)+'</select>')+'</div><div class="task-panel">'+tabs(["Open","Today","Upcoming","Overdue","Completed"],taskFilter,"filter")+'<div id="results">'+taskResults(project)+'</div></div>';
+}
+
+const historyDate = new Intl.DateTimeFormat("en-US", {month:"short", day:"numeric", year:"numeric"});
+const historyTime = new Intl.DateTimeFormat("en-GB", {hour:"2-digit", minute:"2-digit"});
+
+function completionList() {
+  const done = state.tasks.filter(task => task.status === "Done" && (
+    !historyTag || (historyTag === "untagged" ? !task.tags?.length : task.tags?.some(name => "tag/" + tagKey(name) === historyTag))
+  )).sort((a,b) => (Date.parse(b.completedAt) || 0) - (Date.parse(a.completedAt) || 0) || a.title.localeCompare(b.title));
+  if (!done.length) return `<p class="empty">${historyTag ? "这个标签下还没有已完成的任务。" : "勾选完成的任务后，会在这里看到它。"}</p>`;
+  const days = new Map();
+  for (const task of done) {
+    const day = task.completedAt ? dayKey(new Date(task.completedAt)) : "";
+    if (!days.has(day)) days.set(day, []);
+    days.get(day).push(task);
+  }
+  return `<p class="history-count" role="status">${plural(done.length,"completed task")}</p>` + [...days].map(([day,tasks]) => {
+    const date = day ? historyDate.format(new Date(day+"T12:00:00")) : "完成日期未记录";
+    const entries = tasks.map(task => {
+      const project = getProject(task.project);
+      const time = task.completedAt ? `<time datetime="${esc(task.completedAt)}">${historyTime.format(new Date(task.completedAt))}</time>` : "";
+      return `<li class="history-entry"><div class="history-main"><button class="task-name" data-action="edit-task" data-key="${task.id}">${esc(task.title)}</button>
+        <div class="history-info">${time}${project ? `<span class="history-project" style="${theme(project.color)}"><i class="dot"></i>${esc(project.name)}</span>` : ""}${tagChips(task.tags,true)}</div></div>
+        <button class="repeat-task" data-action="repeat-task" data-key="${task.id}" aria-label="再做一次 · ${esc(task.title)}">${icon("repeat")}<span lang="zh-Hans">再做一次</span></button></li>`;
+    }).join("");
+    return `<section class="history-day"><h3>${date}</h3><ul class="task-panel history-entries">${entries}</ul></section>`;
+  }).join("");
+}
+
+function completedPage() {
+  const filters = [["","All tags · 全部标签"],["untagged","Untagged · 无标签"],
+    ...workspaceTags().map(name => ["tag/" + tagKey(name), name])];
+  if (historyTag.startsWith("tag/") && !filters.some(([key]) => key === historyTag)) filters.push([historyTag, historyTag.slice(4)]);
+  return `<section class="workspace-section" id="completed" tabindex="-1" aria-labelledby="completed-title">
+    <div class="section-heading"><h2 id="completed-title">Completed <small lang="zh-Hans">已完成</small></h2>
+      <select id="history-tag" aria-label="Filter completed tasks by tag · 按标签筛选">${options(filters,historyTag)}</select></div>
+    <div id="history-list">${completionList()}</div></section>`;
+}
+
+function tagOption(name, checked = false, created = false) {
+  return `<label class="tag-choice"><input type="checkbox" name="taskTag" value="${esc(name)}"${checked ? " checked" : ""}${created ? " data-created" : ""}>
+    <span class="tag-chip" data-tone="${tagTone(name)}">#${esc(name)}</span></label>`;
+}
+
+function tagPicker(tags = []) {
+  const selected = new Set(tags.map(tagKey));
+  return `<fieldset class="tag-picker"><legend>Tags · 标签 <small>可选</small></legend>
+    <div class="tag-options">${workspaceTags().map(name => tagOption(name,selected.has(tagKey(name)))).join("")}</div>
+    <div class="tag-create"><input id="new-tag-name" type="text" maxlength="60" placeholder="新标签名称" aria-label="New tag name · 新标签名称">
+    <button type="button" class="secondary" data-action="add-tag">${icon("plus")}添加标签</button></div></fieldset>`;
+}
+
+function addDraftTag(form) {
+  const input = form.querySelector("#new-tag-name"), name = cleanTag(input.value);
+  if (!name) return true;
+  if (!validTags([name])) {
+    input.setCustomValidity("标签名称最多 60 个字符。"); input.reportValidity(); return false;
+  }
+  const existing = [...form.querySelectorAll('[name="taskTag"]')].find(option => tagKey(option.value) === tagKey(name));
+  if (existing) existing.checked = true;
+  else form.querySelector(".tag-options").insertAdjacentHTML("beforeend",tagOption(name,true,true));
+  input.value = "";
+  return true;
 }
 
 function openDialog(title,body) {
@@ -353,6 +483,7 @@ function editor(kind,record,defaultDue=dayKey(),slotTime="",defaultStart="") {
     const range = !!start && start !== (record?.due ?? defaultDue);
     fields=field("Task name",'<input name="title" value="'+esc(record?.title||"")+'" required maxlength="240" autofocus>')+
       field("Project",select("project",[["","Unassigned"],...state.projects.map(p=>[p.id,p.name])],record?.project??(route==="project"?projectId:"")))+
+      tagPicker(record?.tags)+
       '<label class="range-option"><input id="date-range-toggle" type="checkbox" '+(range?"checked":"")+'>跨天任务 · Multiple days</label>'+
       '<div id="task-dates" '+(range?'class="form-pair"':'')+'><label class="field" id="task-start-date" '+(range?'':'hidden')+'>Start date · 开始日期<input name="startDate" type="date" value="'+esc(start||record?.due||defaultDue)+'" '+(range?'required':'disabled')+'></label>'+
       field("Due date · 截止日期",'<input name="due" type="date" value="'+esc(record?.due??defaultDue)+'" '+(range?'required':'')+'>')+'</div>'+
@@ -367,7 +498,18 @@ function editor(kind,record,defaultDue=dayKey(),slotTime="",defaultStart="") {
       '<div class="form-pair">'+field("Color",select("color",Object.entries(palette).map(([k,v])=>[k,v.name]),record?.color||"moss"))+
       field("Icon",select("icon",Object.entries(iconNames),record?.icon||"folder"))+'</div>';
   }
-  openDialog((record?"Edit ":"New ")+kind,'<form id="record-form" data-kind="'+kind+'" data-key="'+formId+'"><div class="form-grid">'+fields+'</div>'+formActions(!!record,record?"Save changes":"Create "+kind)+'</form>');
+  openDialog((formId?"Edit ":"New ")+kind,'<form id="record-form" data-kind="'+kind+'" data-key="'+formId+'"><div class="form-grid">'+fields+'</div>'+formActions(!!formId,formId?"Save changes":"Create "+kind)+'</form>');
+}
+function repeatTask(task) {
+  if (!task) return;
+  const today = new Date(), start = dayKey(today);
+  let due = start;
+  if (spansDays(task)) {
+    const days = (Date.parse(task.due) - Date.parse(task.startDate)) / 86400000;
+    due = dayKey(calendarOffset(today, days));
+  }
+  editor("task", {title:task.title, project:task.project, priority:task.priority, tags:task.tags, time:task.time, endTime:task.endTime,
+    status:"To do", due, startDate:due === start ? "" : start});
 }
 function confirmAction(title,body,label,callback){
   openDialog(title,'<p>'+esc(body)+'</p><div class="dialog-actions"><button class="secondary" data-action="close">Cancel</button><button class="danger" id="confirm-action">'+esc(label)+'</button></div>');
@@ -424,7 +566,16 @@ function submitRecord(event){
     return;
   }
   const collection=task?"tasks":"projects", next=structuredClone(state);
+  delete fields.taskTag;
   const record={id:key||id(),...fields,sample:false};
+  if (task) {
+    if (!addDraftTag(form)) return;
+    const selected = [...form.querySelectorAll('[name="taskTag"]:checked')].map(option => option.value);
+    if (selected.length) record.tags = uniqueTags(selected);
+    const created = [...form.querySelectorAll('[name="taskTag"][data-created]')].map(option => option.value);
+    if (created.length || selected.length) next.tags = uniqueTags([...(next.tags || []), ...created, ...selected]);
+    recordStatus(record,fields.status,getTask(key));
+  }
   if(key){
     const index=next[collection].findIndex(x=>x.id===key);
     if(index<0){dialog.close();render();notify("This item was removed in another tab");return;}
@@ -458,13 +609,15 @@ function handleAction(event){
       $("#menu-btn").setAttribute("aria-expanded",String(open));if(open) $("#sidebar .brand").focus();else $("#menu-btn").focus();break;
     }
     case "new-task": closeMenu();editor("task",undefined,control.dataset.date || (control.closest("#calendar") ? dayKey(calendarDate) : dayKey()),control.dataset.time);break;
+    case "add-tag": addDraftTag(control.form); $("#new-tag-name").focus(); break;
+    case "repeat-task": repeatTask(getTask(key)); break;
     case "new-project": closeMenu();editor("project");break;
     case "edit-task": editor("task",getTask(key));break;
     case "edit-project": editor("project",getProject(key));break;
     case "toggle":{
       const next=structuredClone(state), item=next.tasks.find(t=>t.id===key);
       if(!item)break;
-      item.status=item.status==="Done"?"To do":"Done";item.sample=false;
+      recordStatus(item,item.status==="Done"?"To do":"Done",item);item.sample=false;
       if(save(next)){render();notify(item.status==="Done"?"Task completed":"Task reopened");}break;
     }
     case "focus": focusFilter=key;render();break;
@@ -487,7 +640,7 @@ document.addEventListener("click", event => {
   if (!link) return;
   if (link.closest("#sidebar, #welcome-navigation")) closeMenu();
   // Re-selecting the current hash after manual scrolling should land on its section again.
-  if ((link.closest("#sidebar, #welcome-navigation") || link.hash.startsWith("#tasks/")) && location.hash === link.hash &&
+  if ((link.closest("#sidebar, #welcome-navigation") || link.hash.startsWith("#tasks/") || link.hash.startsWith("#completed")) && location.hash === link.hash &&
       !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) {
     event.preventDefault();
     setRoute(true);
@@ -495,6 +648,12 @@ document.addEventListener("click", event => {
   }
 });
 document.addEventListener("submit",submitRecord);
+document.addEventListener("keydown", event => {
+  if (event.target.id === "new-tag-name" && event.key === "Enter" && !event.isComposing && event.keyCode !== 229) {
+    event.preventDefault();
+    addDraftTag(event.target.form);
+  }
+});
 document.addEventListener("input",e=>{
   if(e.target.id==="task-search"){search=e.target.value;$("#results").innerHTML=taskResults(route==="project"?getProject(projectId):null);}
   if(e.target.matches("#record-form input"))e.target.setCustomValidity("");
@@ -514,6 +673,14 @@ document.addEventListener("change",async e=>{
     startDate.required=due.required=enabled;
     due.setCustomValidity("");
     if (enabled) startDate.value=due.value || dayKey(calendarDate);
+  }
+  if (e.target.id === "history-tag") {
+    historyTag = e.target.value;
+    const suffix = historyTag.startsWith("tag/") ? "/tag/"+encodeURIComponent(historyTag.slice(4)) : historyTag ? "/untagged" : "";
+    history.replaceState(null,"","#completed"+suffix);
+    setRoute(true);
+    $("#history-list").innerHTML = completionList();
+    syncSectionNavigation();
   }
   if(e.target.id==="project-filter"){projectFilter=e.target.value;$("#results").innerHTML=taskResults(null);}
   if(e.target.id==="backup-file" && e.target.files[0]){

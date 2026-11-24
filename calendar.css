@@ -133,7 +133,17 @@
 .cal-week-block .cal-time { white-space: nowrap; font-size: 11px; }
 .cal-week-block .cal-event-title { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: var(--title-lines); overflow: hidden; line-height: 16px; }
 .cal-week-schedule .cal-ruler span:first-child { transform: none; }
-#calendar[data-view="day"] > :is(.section-heading, .cal-toolbar, .cal-sheet) { max-width: 860px; margin-inline: auto; }
+#calendar[data-view="day"] > :is(.section-heading, .cal-toolbar, .cal-sheet) { max-width: 1200px; margin-inline: auto; }
+@media (min-width: 851px) {
+  #calendar[data-view="day"] {
+    /* Give the timetable more of the workspace while leaving the corner cat reachable. */
+    margin-inline-start: calc(16px - clamp(20px, 3.3vw, 64px));
+    margin-inline-end: calc(var(--writer-width) * .42 + var(--writer-gap) + 10px - max(4vw, var(--writer-width) + var(--writer-gap) + 12px));
+  }
+}
+@media (max-width: 850px) {
+  #calendar[data-view="day"] { margin-inline: -7px; }
+}
 .cal-day-halves {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -289,3 +299,7 @@
   color: var(--event-detail);
 }
 [data-appearance="dark"] :is(.cal-agenda-row, .cal-block) .check:not(.checked)::before { border-color: var(--accent); }
+
+.cal-agenda-task .tag-list { margin-top: 2px; }
+.cal-block .tag-list { flex: 0 1 auto; min-height: 0; overflow: hidden; }
+.cal-block .tag-chip { font-size: 10px; line-height: 1.3; }

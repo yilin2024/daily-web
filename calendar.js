@@ -96,7 +96,7 @@ function calendarEvent(task, projects, compact, position = "", date = task.due, 
   const range = task.endTime ? task.time + "–" + (task.endTime === "00:00" ? "24:00" : task.endTime) : task.time || "";
   const projectName = esc(project?.name || "Unassigned");
   const dates = spansDays(task) ? task.startDate + " – " + task.due : "";
-  const description = [done ? "Completed" : "", dates, range, title, projectName].filter(Boolean).join(" · ");
+  const description = [done ? "Completed" : "", dates, range, title, projectName, ...(task.tags || []).map(name => "#" + esc(name))].filter(Boolean).join(" · ");
   const style = calendarColor(project);
   if (compact) {
     return `<button class="cal-event${position ? " cal-week-block" : ""}${done ? " is-done" : ""}" style="${style};${position}" data-action="edit-task" data-key="${task.id}" title="${description}" aria-label="Edit ${description}">
@@ -107,7 +107,7 @@ function calendarEvent(task, projects, compact, position = "", date = task.due, 
     <button class="check${done ? " checked" : ""}" data-action="toggle" data-key="${task.id}" role="checkbox" aria-checked="${done}" aria-label="Mark ${title} ${done ? "open" : "complete"}">${done ? icon("check") : ""}</button>
     <button class="cal-agenda-task" data-action="edit-task" data-key="${task.id}" aria-label="Edit ${description}" title="${description}">
       ${time ? `<time class="cal-agenda-time" datetime="${date}T${segment?.start || task.time}">${segment?.label || range}</time>` : ""}
-      <span class="cal-task-title">${title}</span>${position ? "" : `<span class="cal-project"><i class="dot"></i>${projectName}</span>`}
+      <span class="cal-task-title">${title}</span>${tagChips(task.tags)}${position ? "" : `<span class="cal-project"><i class="dot"></i>${projectName}</span>`}
     </button></div>`;
 }
 
@@ -281,7 +281,7 @@ function calendarMonthWeek(dates, byDate, projects, month, previousRows) {
     rowEnds[row] = last;
     const before = task.startDate < keys[0], after = task.due > keys[6];
     if (after) nextRows.set(task.id, row);
-    const label = esc(task.title) + " · " + task.startDate + " – " + task.due;
+    const label = [esc(task.title),task.startDate + " – " + task.due,...(task.tags || []).map(name => "#" + esc(name))].join(" · ");
     const range = shortDate(task.startDate) + "–" + shortDate(task.due);
     return `<button class="cal-event cal-span${task.status === "Done" ? " is-done" : ""}${before ? " from-prior" : ""}${after ? " to-next" : ""}" data-key="${task.id}" data-action="edit-task" title="${label}" aria-label="Edit ${label}"
       style="${calendarColor(projects.get(task.project))};grid-column:${first + 1} / span ${last - first + 1};grid-row:${row + 1}">${before ? '<span class="cal-continuation" aria-hidden="true">‹</span>' : ""}<span class="cal-event-title">${esc(task.title)}</span><small class="cal-span-dates" aria-hidden="true">${range}</small>${after ? '<span class="cal-continuation" aria-hidden="true">›</span>' : ""}</button>`;

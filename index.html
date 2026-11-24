@@ -6,11 +6,11 @@
   <meta name="theme-color" content="#141414">
   <meta name="description" content="Yilin’s Daily Work · 日常工作手记. A personal home for projects, tasks, and progress.">
   <link rel="icon" href="./favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles.css?v=cat-choreography">
-  <link rel="stylesheet" href="./calendar.css?v=wide-day">
+  <link rel="stylesheet" href="./styles.css?v=task-tags">
+  <link rel="stylesheet" href="./calendar.css?v=wide-day-tags">
   <title>Yilin’s Daily Work · 日常工作手记</title>
-  <script defer src="./calendar.js?v=day-halves-month-range"></script>
-  <script defer src="./app.js?v=day-halves-month-range"></script>
+  <script defer src="./calendar.js?v=task-tags"></script>
+  <script defer src="./app.js?v=task-tags"></script>
   <script defer src="./cat.js?v=3"></script>
 </head>
 <body>
@@ -24,6 +24,7 @@
       <a href="#projects" aria-label="Projects / 项目"><i data-icon="folder"></i><span class="nav-text">Projects <small lang="zh-Hans">项目</small></span></a>
       <a href="#tasks" aria-label="Tasks / 任务"><i data-icon="tasks"></i><span class="nav-text">Tasks <small lang="zh-Hans">任务</small></span></a>
       <a href="#calendar" aria-label="Calendar / 日历"><i data-icon="calendar"></i><span class="nav-text">Calendar <small lang="zh-Hans">日历</small></span></a>
+      <a href="#completed" aria-label="Completed / 已完成"><i data-icon="complete"></i><span class="nav-text">Completed <small lang="zh-Hans">已完成</small></span></a>
     </nav>
     <div class="welcome-tools">
       <time id="welcome-date"></time>
@@ -68,6 +69,7 @@
         <a class="nav-link" href="#projects"><i data-icon="folder"></i>Projects</a>
         <a class="nav-link" href="#tasks"><i data-icon="tasks"></i>My tasks</a>
         <a class="nav-link" href="#calendar"><i data-icon="calendar"></i>Calendar</a>
+        <a class="nav-link" href="#completed"><i data-icon="complete"></i>Completed</a>
       </nav>
       <div class="rail-heading"><p class="eyebrow">My projects</p><button class="icon-button" data-action="new-project" aria-label="Add project"><span aria-hidden="true">+</span></button></div>
       <nav id="project-nav" aria-label="My projects"></nav></div>
