@@ -17,6 +17,7 @@ const paths = {
   panel:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/>',
   plus:'<path d="M12 5v14M5 12h14"/>', close:'<path d="m6 6 12 12m0-12L6 18"/>',
   arrow:'<path d="M4 12h15m-6-6 6 6-6 6"/>',
+  moon:'<path d="M20.5 15.1A8.7 8.7 0 0 1 8.9 3.5 9 9 0 1 0 20.5 15.1Z"/>',
   sun:'<circle cx="12" cy="12" r="4"/><path d="M12 1v3m0 16v3M1 12h3m16 0h3M4 4l2 2m12 12 2 2M4 20l2-2M18 6l2-2"/>',
   pencil:'<path d="m5 15 11-11 4 4L9 19l-5 1zM14 6l4 4"/>'
 };
@@ -107,7 +108,8 @@ function save(next, allowRestore=false) {
     state=next; stored=raw; loadError=""; return true;
   } catch (e) { alert("Could not save. "+e.message); return false; }
 }
-let route="overview", projectId="", taskFilter="Open", focusFilter="Today", projectFilter="All", search="", toastTimer;
+let route="welcome", projectId="", taskFilter="Open", focusFilter="Today", projectFilter="All", search="", toastTimer;
+const appearanceKey = storageKey + ":appearance";
 const dialog = $("#editor");
 const getProject = key => state.projects.find(p=>p.id===key);
 const getTask = key => state.tasks.find(t=>t.id===key);
@@ -125,17 +127,50 @@ function notify(message) {
 }
 function setRoute(){
   const [page,key] = location.hash.slice(1).split("/");
-  const nextRoute=page==="project"&&getProject(key)?"project":["tasks","projects"].includes(page)?page:"overview";
+  let nextRoute = "welcome";
+  if (page === "project" && getProject(key)) nextRoute = "project";
+  else if (["overview", "tasks", "projects"].includes(page)) nextRoute = page;
   if (nextRoute!==route || key!==projectId) {taskFilter="Open";projectFilter="All";search="";}
+  if (nextRoute === "tasks" && key === "today") taskFilter = "Today";
   route=nextRoute;projectId=key||"";closeMenu();render();
+}
+function applyAppearance(value) {
+  const light = value === "light";
+  document.documentElement.dataset.appearance = light ? "light" : "dark";
+  $('meta[name="theme-color"]').setAttribute("content", light ? "#f6f6f9" : "#121216");
+  document.querySelectorAll('[data-action="appearance"]').forEach(button => {
+    const label = light ? "Switch to dark mode / 切换为深色模式" : "Switch to light mode / 切换为浅色模式";
+    button.setAttribute("aria-label", label);
+    button.title = label;
+    button.innerHTML = icon(light ? "moon" : "sun");
+  });
+}
+function renderWelcome() {
+  document.title = "Yilin’s Daily Work · 日常工作手记";
+  const today = dayKey();
+  const openTasks = state.tasks.filter(task => task.status !== "Done");
+  const date = $("#welcome-date");
+  date.dateTime = today;
+  date.textContent = new Date().toLocaleDateString("en-US", {weekday:"short", month:"short", day:"numeric"});
+  $("#welcome-projects").textContent = state.projects.length;
+  $("#welcome-open").textContent = openTasks.length;
+  $("#welcome-today").textContent = openTasks.filter(task => task.due === today).length;
 }
 function closeMenu(){document.body.classList.remove("menu-open");$("#menu-btn").setAttribute("aria-expanded","false");$("#scrim").hidden=true;}
 function render(){
+  const welcome = route === "welcome";
+  $("#welcome").hidden = !welcome;
+  $("#workspace").hidden = welcome;
+  $(".skip").href = welcome ? "#welcome-main" : "#main";
+  if (welcome) {
+    renderWelcome();
+    return;
+  }
   const project = route==="project" ? getProject(projectId) : null;
   if(route==="project" && !project){location.hash="projects";return;}
   const pages=[["overview","Overview","grid"],["projects","Projects","folder"],["tasks","My tasks","tasks"]];
   const title=project?project.name:pages.find(p=>p[0]===route)[1];
-  document.title=title+" · Fieldwork";$("#crumb").textContent=title;
+  document.title=title+" · Yilin’s Daily Work";$("#crumb").textContent=title;
   $("#nav").innerHTML=pages.map(([page,label,symbol])=>'<a class="nav-link '+(route===page?"active":"")+'" '+(route===page?'aria-current="page"':'')+' href="#'+page+'">'+icon(symbol)+label+'</a>').join("");
   $("#project-nav").innerHTML=state.projects.map(p=>'<a class="project-link '+(project?.id===p.id?"active":"")+'" href="#project/'+p.id+'" style="'+theme(p.color)+'"><span class="dot"></span><span>'+esc(p.name)+'</span></a>').join("");
   $("#workspace-type").textContent = state.projects.some(p=>p.sample) || state.tasks.some(t=>t.sample) ? "Sample workspace" : "Saved in this browser";
@@ -160,7 +195,7 @@ function overview(){
   const active=state.projects.filter(p=>progress(p).status!=="Complete").length;
   const date=new Date().toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"});
   const intro=due.length ? plural(due.length,"task")+' due today. '+plural(active,"active project")+' in your workspace.' : 'Nothing due today. '+plural(open.length,"open task")+' in your workspace.';
-  return '<section class="hero"><div class="hero-copy"><div class="date-label">'+icon("sun")+date+'</div><h1>Workspace overview</h1><p>'+intro+'</p></div><img id="terrain" src="./terrain.png" alt=""></section>'+
+  return '<section class="hero"><div class="hero-copy"><div class="date-label">'+icon("sun")+date+'</div><h1>Workspace overview</h1><p>'+intro+'</p></div><img class="overview-art" src="./quiet-days.webp" alt=""></section>'+
     '<div class="stats">'+metric(active,"Active projects","folder","moss")+metric(open.length,"Open tasks","tasks","clay")+metric(completed,"Completed tasks","complete","iris")+metric((state.tasks.length?Math.round(completed/state.tasks.length*100):0)+"%","Overall progress","chart","lake")+'</div>'+
     '<section class="section">'+sectionHead("My projects","projects","All projects")+cards(state.projects.slice(0,3))+'</section>'+
     '<section class="section">'+sectionHead("Task focus","tasks","All tasks")+'<div class="task-panel">'+tabs(["Today","Upcoming","Overdue"],focusFilter,"focus")+rows(filtered(open,focusFilter))+'</div></section>';
@@ -289,6 +324,12 @@ function handleAction(event){
   if(!control) return;
   const {action,key}=control.dataset;
   switch(action){
+    case "appearance": {
+      const next = document.documentElement.dataset.appearance === "dark" ? "light" : "dark";
+      applyAppearance(next);
+      try { localStorage.setItem(appearanceKey, next); } catch { /* Keep the chosen appearance for this visit. */ }
+      break;
+    }
     case "menu":{
       const open=document.body.classList.toggle("menu-open");$("#scrim").hidden=!open;
       $("#menu-btn").setAttribute("aria-expanded",String(open));if(open) $("#sidebar .brand").focus();else $("#menu-btn").focus();break;
@@ -314,6 +355,10 @@ function handleAction(event){
   }
 }
 document.addEventListener("click",handleAction);
+$(".skip").addEventListener("click", event => {
+  event.preventDefault();
+  $(route === "welcome" ? "#welcome-main" : "#main").focus();
+});
 document.addEventListener("click",e=>{if(e.target.closest("#sidebar a"))closeMenu();});
 document.addEventListener("submit",submitRecord);
 document.addEventListener("input",e=>{
@@ -334,8 +379,9 @@ document.addEventListener("change",async e=>{
 });
 dialog.addEventListener("click",e=>{if(e.target===dialog){const r=dialog.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)dialog.close();}});
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!dialog.open&&document.body.classList.contains("menu-open")){closeMenu();$("#menu-btn").focus();}});
-window.addEventListener("hashchange",()=>{setRoute();window.scrollTo(0,0);$("#main").focus({preventScroll:true});});
+window.addEventListener("hashchange",()=>{setRoute();window.scrollTo(0,0);$(route==="welcome"?"#welcome-main":"#main").focus({preventScroll:true});});
 window.addEventListener("storage",e=>{
+  if (e.key === appearanceKey) { applyAppearance(e.newValue); return; }
   if(e.key!==storageKey&&e.key!==null) return;
   if(dialog.open) dialog.close();
   load();setRoute();notify("Workspace updated in another tab");
@@ -348,5 +394,8 @@ document.addEventListener("visibilitychange",refreshDay);
 setInterval(refreshDay,60000);
 
 document.querySelectorAll("[data-icon]").forEach(el=>el.outerHTML=icon(el.dataset.icon));
+let savedAppearance;
+try { savedAppearance = localStorage.getItem(appearanceKey); } catch { /* Use the default appearance. */ }
+applyAppearance(savedAppearance);
 load();
 setRoute();

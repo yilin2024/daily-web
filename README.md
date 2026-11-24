@@ -1,6 +1,6 @@
-# Fieldwork
+# Yilin’s Daily Work
 
-Open [index.html](./index.html) in a modern browser to use the dashboard. It also works on GitHub Pages without a build step.
+Open [index.html](./index.html) for the bilingual welcome page. Choose **Enter workspace / 进入工作台** to open the dashboard, or bookmark [the overview](https://yilin2024.github.io/daily-web/#overview) to go straight to your work. It also works on GitHub Pages without a build step.
 
 - Use **New task** to capture work. A task can have a project, priority, status, and due date.
 - Open a project to see its tasks. Checking off a task updates both project and overall progress. Each task counts equally.
