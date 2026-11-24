@@ -20,6 +20,8 @@ const paths = {
   arrow:'<path d="M4 12h15m-6-6 6 6-6 6"/>',
   moon:'<path d="M20.5 15.1A8.7 8.7 0 0 1 8.9 3.5 9 9 0 1 0 20.5 15.1Z"/>',
   sun:'<circle cx="12" cy="12" r="4"/><path d="M12 1v3m0 16v3M1 12h3m16 0h3M4 4l2 2m12 12 2 2M4 20l2-2M18 6l2-2"/>',
+  droplet:'<path d="M12 2.5C10 6.6 5 10.5 5 14.5a7 7 0 1 0 14 0c0-4-5-7.9-7-12Z"/><path d="M8.5 14.6a3.5 3.5 0 0 0 3.5 3.6"/>',
+  dropletOff:'<path d="M9.6 6.4A30 30 0 0 0 12 2.5c2 4.1 7 8 7 12M6.6 10.3A8 8 0 0 0 5 14.5a7 7 0 0 0 12.1 4.8M3 3l18 18"/>',
   pencil:'<path d="m5 15 11-11 4 4L9 19l-5 1zM14 6l4 4"/>'
 };
 const palette = {
@@ -111,6 +113,7 @@ function save(next, allowRestore=false) {
 }
 let route="welcome", projectId="", taskFilter="Open", focusFilter="Today", projectFilter="All", search="", toastTimer;
 const appearanceKey = storageKey + ":appearance";
+const rainKey = storageKey + ":rain";
 const dialog = $("#editor");
 const getProject = key => state.projects.find(p=>p.id===key);
 const getTask = key => state.tasks.find(t=>t.id===key);
@@ -153,6 +156,13 @@ function applyAppearance(value) {
     button.title = label;
     button.innerHTML = icon(light ? "moon" : "sun");
   });
+}
+function applyRain(visible) {
+  $("#rain").hidden = !visible;
+  const button = $('[data-action="rain"]');
+  button.setAttribute("aria-pressed", String(visible));
+  button.title = visible ? "Hide rain / 隐藏雨滴" : "Show rain / 显示雨滴";
+  button.innerHTML = icon(visible ? "droplet" : "dropletOff");
 }
 function renderWelcome() {
   const today = dayKey();
@@ -391,6 +401,12 @@ function handleAction(event){
       try { localStorage.setItem(appearanceKey, next); } catch { /* Keep the chosen appearance for this visit. */ }
       break;
     }
+    case "rain": {
+      const visible = $("#rain").hidden;
+      applyRain(visible);
+      try { localStorage.setItem(rainKey, visible ? "on" : "off"); } catch { /* Keep this choice for the current visit. */ }
+      break;
+    }
     case "menu":{
       const open=document.body.classList.toggle("menu-open");$("#scrim").hidden=!open;
       $("#menu-btn").setAttribute("aria-expanded",String(open));if(open) $("#sidebar .brand").focus();else $("#menu-btn").focus();break;
@@ -457,6 +473,8 @@ window.addEventListener("hashchange", () => {
 });
 window.addEventListener("storage",e=>{
   if (e.key === appearanceKey) { applyAppearance(e.newValue); return; }
+  if (e.key === rainKey) { applyRain(e.newValue !== "off"); return; }
+  if (e.key === null) applyRain(true);
   if(e.key!==storageKey&&e.key!==null) return;
   if(dialog.open) dialog.close();
   load();setRoute();notify("Workspace updated in another tab");
@@ -471,9 +489,13 @@ setInterval(refreshDay,60000);
 document.querySelectorAll("[data-icon]").forEach(el=>el.outerHTML=icon(el.dataset.icon));
 window.addEventListener("scroll", syncSectionNavigation, {passive:true});
 window.addEventListener("resize", syncSectionNavigation);
-let savedAppearance;
-try { savedAppearance = localStorage.getItem(appearanceKey); } catch { /* Use the default appearance. */ }
+let savedAppearance, savedRain;
+try {
+  savedAppearance = localStorage.getItem(appearanceKey);
+  savedRain = localStorage.getItem(rainKey);
+} catch { /* Use the default appearance and rain settings. */ }
 applyAppearance(savedAppearance);
+applyRain(savedRain !== "off");
 load();
 setRoute();
 if (route !== "welcome") scrollToRoute("instant", false);

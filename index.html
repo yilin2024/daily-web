@@ -6,12 +6,12 @@
   <meta name="theme-color" content="#141414">
   <meta name="description" content="Yilin’s Daily Work · 日常工作手记. A personal home for projects, tasks, and progress.">
   <link rel="icon" href="./favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles.css?v=weather-layers">
+  <link rel="stylesheet" href="./styles.css?v=rain-control">
   <title>Yilin’s Daily Work · 日常工作手记</title>
-  <script defer src="./app.js?v=writing-hero"></script>
+  <script defer src="./app.js?v=rain-control"></script>
 </head>
 <body>
-  <div class="weather" aria-hidden="true"><div class="rain"></div><div class="sunlight"></div></div>
+  <div class="weather" aria-hidden="true"><div class="rain" id="rain"></div><div class="sunlight"></div></div>
   <a class="skip" href="#welcome-main">Skip to content</a>
 
   <header class="welcome-header">
@@ -23,7 +23,10 @@
     </nav>
     <div class="welcome-tools">
       <time id="welcome-date"></time>
-      <button class="appearance-btn" data-action="appearance" aria-label="Switch to light mode / 切换为浅色模式"><i data-icon="sun"></i></button>
+      <div class="weather-controls">
+        <button type="button" class="weather-btn appearance-btn" data-action="appearance" aria-label="Switch to light mode / 切换为浅色模式"><i data-icon="sun"></i></button>
+        <button type="button" class="weather-btn" data-action="rain" aria-label="Rain / 雨滴" aria-controls="rain" aria-pressed="true" title="Hide rain / 隐藏雨滴"><i data-icon="droplet"></i></button>
+      </div>
     </div>
   </header>
 
