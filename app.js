@@ -273,7 +273,7 @@ function setupAstronautGaze() {
       eyeX = bodyX = aimX; eyeY = bodyY = aimY; lastTime = 0;
       if (!aimX && !aimY) { rest(); return; }
     }
-    portrait.style.transform = `translate(${bodyX * .7}%, ${bodyY * .6}%) rotate(${bodyX * 3.2}deg)`;
+    portrait.style.transform = `translate(${bodyX * 4.5}%, ${bodyY * 2.8}%)`;
     paintEyes();
     if (!settled) frame = requestAnimationFrame(draw);
   }

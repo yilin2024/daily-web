@@ -119,22 +119,22 @@ body { isolation: isolate; padding-top: var(--header-height); }
 }
 .rain, .sunlight { position: absolute; inset: 0; }
 .rain::before, .rain::after {
-  --stretch: 1.24;
+  --stretch: 1.62;
   --tile-height: calc(var(--tile) * var(--stretch));
   --streaks: url("./assets/rain.webp");
   content: "";
   position: absolute;
   /* One tile of overscan keeps the repeating rain seamless at the loop boundary. */
   inset: calc(0px - var(--tile-height)) -22vh 0;
-  background-image: var(--streaks), var(--streaks);
+  background-image: var(--streaks), var(--streaks), var(--streaks);
   background-repeat: repeat;
   /* Preserve drop density while lengthening the streaks. */
   background-size: calc(var(--tile) / var(--stretch)) var(--tile-height);
   filter: grayscale(1) brightness(1.24);
   transform: skewX(-9deg);
 }
-.rain::before { --tile: 252px; opacity: .58; background-position: 93px 37px; }
-.rain::after { --tile: 400px; opacity: .95; }
+.rain::before { --tile: 252px; opacity: .73; background-position: 93px 37px; }
+.rain::after { --tile: 400px; }
 @keyframes rainfall {
   from { transform: skewX(-9deg) translateY(0); }
   to { transform: skewX(-9deg) translateY(var(--tile-height)); }
@@ -363,7 +363,7 @@ body { isolation: isolate; padding-top: var(--header-height); }
   pointer-events: none;
   user-select: none;
 }
-.astronaut-portrait { position: relative; width: 100%; transform-origin: 50% 88%; }
+.astronaut-portrait { position: relative; width: 100%; }
 .astronaut-portrait img, .astronaut-portrait canvas { display: block; width: 100%; height: auto; }
 .astronaut-portrait canvas { position: absolute; inset: 0; pointer-events: none; }
 .welcome-quotation { margin: 0; max-width: 32ch; }
