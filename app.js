@@ -1,6 +1,7 @@
 "use strict";
 
 const paths = {
+  home:'<path d="m3 10 9-7 9 7M5 9v11h5v-6h4v6h5V9"/>',
   grid:'<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
   tasks:'<rect x="4" y="4" width="16" height="17" rx="3"/><path d="m8 12 3 3 5-6"/>',
   folder:'<path d="M3 7V5a1 1 0 0 1 1-1h5l3 3h8a1 1 0 0 1 1 1v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>',
@@ -137,7 +138,7 @@ function setRoute(){
 function applyAppearance(value) {
   const light = value === "light";
   document.documentElement.dataset.appearance = light ? "light" : "dark";
-  $('meta[name="theme-color"]').setAttribute("content", light ? "#f6f6f9" : "#121216");
+  $('meta[name="theme-color"]').setAttribute("content", light ? "#f7f7f0" : "#111310");
   document.querySelectorAll('[data-action="appearance"]').forEach(button => {
     const label = light ? "Switch to dark mode / 切换为深色模式" : "Switch to light mode / 切换为浅色模式";
     button.setAttribute("aria-label", label);
@@ -157,10 +158,82 @@ function renderWelcome() {
   $("#welcome-today").textContent = openTasks.filter(task => task.due === today).length;
 }
 function closeMenu(){document.body.classList.remove("menu-open");$("#menu-btn").setAttribute("aria-expanded","false");$("#scrim").hidden=true;}
+
+function setupAstronautGaze() {
+  const hero = $(".welcome-hero");
+  const portrait = $(".astronaut-portrait");
+  const image = $("#astronaut");
+  const canvas = $("#astronaut-gaze");
+  const context = canvas.getContext?.("2d");
+  if (!context || !window.matchMedia) return () => {};
+
+  const motion = window.matchMedia("(any-hover: hover) and (any-pointer: fine) and (prefers-reduced-motion: no-preference)");
+  // Eye patches in the original 860px-square artwork, measured as fractions of its size.
+  const eyes = [[.306, .371, .056, .059], [.472, .361, .059, .060]];
+  let tracking = false;
+  let frame = 0;
+  let aimX = 0;
+  let aimY = 0;
+
+  function rest() {
+    if (frame) cancelAnimationFrame(frame);
+    frame = 0;
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    portrait.style.removeProperty("--lean");
+  }
+
+  function draw() {
+    frame = 0;
+    if (!image.complete || !image.naturalWidth) return;
+    const size = canvas.width;
+    context.clearRect(0, 0, size, size);
+    for (const [centerX, centerY, fractionW, fractionH] of eyes) {
+      const x = centerX * size, y = centerY * size;
+      const width = Math.round(fractionW * size), height = Math.round(fractionH * size);
+      const left = Math.round(x - width / 2), top = Math.round(y - height / 2);
+      const mask = context.createRadialGradient(x, y, Math.min(width, height) * .46, x, y, Math.max(width, height) * .72);
+      mask.addColorStop(0, "#030401");
+      mask.addColorStop(1, "rgba(3,4,1,0)");
+      context.fillStyle = mask;
+      context.fillRect(x - width, y - height, width * 2, height * 2);
+      context.drawImage(image, left, top, width, height, left + Math.round(aimX * 8), top + Math.round(aimY * 6), width, height);
+    }
+    portrait.style.setProperty("--lean", (aimX * 1.6) + "deg");
+  }
+
+  function follow(event) {
+    if (event.pointerType === "touch") { rest(); return; }
+    const rect = hero.getBoundingClientRect();
+    const normalize = fraction => Math.max(-1, Math.min(1, fraction * 2 - 1));
+    aimX = normalize((event.clientX - rect.left) / rect.width);
+    aimY = normalize((event.clientY - rect.top) / rect.height);
+    if (!frame) frame = requestAnimationFrame(draw);
+  }
+
+  function sync() {
+    const enabled = !$("#welcome").hidden && motion.matches;
+    if (enabled === tracking) return;
+    tracking = enabled;
+    if (enabled) {
+      hero.addEventListener("pointermove", follow);
+      hero.addEventListener("pointerleave", rest);
+      hero.addEventListener("pointercancel", rest);
+    } else {
+      hero.removeEventListener("pointermove", follow);
+      hero.removeEventListener("pointerleave", rest);
+      hero.removeEventListener("pointercancel", rest);
+      rest();
+    }
+  }
+  motion.addEventListener("change", sync);
+  return sync;
+}
+
 function render(){
   const welcome = route === "welcome";
   $("#welcome").hidden = !welcome;
   $("#workspace").hidden = welcome;
+  syncAstronautGaze();
   $(".skip").href = welcome ? "#welcome-main" : "#main";
   if (welcome) {
     renderWelcome();
@@ -195,7 +268,7 @@ function overview(){
   const active=state.projects.filter(p=>progress(p).status!=="Complete").length;
   const date=new Date().toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"});
   const intro=due.length ? plural(due.length,"task")+' due today. '+plural(active,"active project")+' in your workspace.' : 'Nothing due today. '+plural(open.length,"open task")+' in your workspace.';
-  return '<section class="hero"><div class="hero-copy"><div class="date-label">'+icon("sun")+date+'</div><h1>Workspace overview</h1><p>'+intro+'</p></div><img class="overview-art" src="./quiet-days.webp" alt=""></section>'+
+  return '<section class="hero"><div class="hero-copy"><div class="date-label">'+icon("sun")+date+'</div><h1>Workspace overview</h1><p>'+intro+'</p></div></section>'+
     '<div class="stats">'+metric(active,"Active projects","folder","moss")+metric(open.length,"Open tasks","tasks","clay")+metric(completed,"Completed tasks","complete","iris")+metric((state.tasks.length?Math.round(completed/state.tasks.length*100):0)+"%","Overall progress","chart","lake")+'</div>'+
     '<section class="section">'+sectionHead("My projects","projects","All projects")+cards(state.projects.slice(0,3))+'</section>'+
     '<section class="section">'+sectionHead("Task focus","tasks","All tasks")+'<div class="task-panel">'+tabs(["Today","Upcoming","Overdue"],focusFilter,"focus")+rows(filtered(open,focusFilter))+'</div></section>';
@@ -394,6 +467,7 @@ document.addEventListener("visibilitychange",refreshDay);
 setInterval(refreshDay,60000);
 
 document.querySelectorAll("[data-icon]").forEach(el=>el.outerHTML=icon(el.dataset.icon));
+const syncAstronautGaze = setupAstronautGaze();
 let savedAppearance;
 try { savedAppearance = localStorage.getItem(appearanceKey); } catch { /* Use the default appearance. */ }
 applyAppearance(savedAppearance);
