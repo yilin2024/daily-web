@@ -70,6 +70,7 @@ function validate(data) {
   const validId = value => typeof value === "string" && /^[a-zA-Z0-9_-]{1,100}$/.test(value);
   const validText = value => typeof value === "string" && value.trim().length > 0;
   const validDay = value => value === "" || (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) && dayKey(new Date(value+"T12:00:00"))===value);
+  const validTime = value => typeof value === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
   if (!data || data.version!==1 || !Array.isArray(data.projects) || !Array.isArray(data.tasks)) throw Error("Unsupported workspace format.");
   const projectIds = new Set(), taskIds = new Set();
   for (const p of data.projects) {
@@ -78,7 +79,8 @@ function validate(data) {
   }
   for (const t of data.tasks) {
     if (!t || !validId(t.id) || taskIds.has(t.id) || !validText(t.title) || (t.project!=="" && !projectIds.has(t.project)) || !priorities.includes(t.priority) || !groups.includes(t.status) || !validDay(t.due)) throw Error("Invalid task in workspace.");
-    if (t.time !== undefined && t.time !== "" && (!t.due || typeof t.time !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/.test(t.time))) throw Error("Invalid task time in workspace.");
+    if (t.time !== undefined && t.time !== "" && (!t.due || !validTime(t.time))) throw Error("Invalid task time in workspace.");
+    if (t.endTime !== undefined && t.endTime !== "" && (!validTime(t.endTime) || !validTimeRange(t.time,t.endTime))) throw Error("Invalid task end time in workspace.");
     taskIds.add(t.id);
   }
   return data;
@@ -158,11 +160,12 @@ function applyAppearance(value) {
     button.innerHTML = icon(light ? "moon" : "sun");
   });
 }
-function applyRain(visible) {
+function applyPrecipitation(visible) {
   $("#rain").hidden = !visible;
+  $("#snow").hidden = !visible;
   const button = $('[data-action="rain"]');
   button.setAttribute("aria-pressed", String(visible));
-  button.title = visible ? "Hide rain / 隐藏雨滴" : "Show rain / 显示雨滴";
+  button.title = visible ? "Hide rain and snow / 隐藏雨雪" : "Show rain and snow / 显示雨雪";
   button.innerHTML = icon(visible ? "droplet" : "dropletOff");
 }
 function renderWelcome() {
@@ -332,14 +335,19 @@ function select(name,values,selected){return '<select name="'+name+'">'+options(
 function formActions(editing,label){
   return '<div class="dialog-actions">'+(editing?'<button class="delete" type="button" data-action="delete">Delete</button>':'')+'<button type="button" class="secondary" data-action="close">Cancel</button><button class="primary" type="submit">'+label+'</button></div>';
 }
-function editor(kind,record,defaultDue=dayKey()) {
+function validTimeRange(start,end) {
+  return !!start && (end > start || (end === "00:00" && start !== "00:00"));
+}
+function editor(kind,record,defaultDue=dayKey(),slotTime="") {
   const formId=record?.id || "";
   let fields;
   if (kind==="task") {
+    const slotEnd = slotTime ? clockLabel((clockMinutes(slotTime) + 30) % 1440) : "";
     fields=field("Task name",'<input name="title" value="'+esc(record?.title||"")+'" required maxlength="240" autofocus>')+
       field("Project",select("project",[["","Unassigned"],...state.projects.map(p=>[p.id,p.name])],record?.project??(route==="project"?projectId:"")))+
-      '<div class="form-pair">'+field("Due date",'<input name="due" type="date" value="'+esc(record?.due??defaultDue)+'">')+
-      field("Time (optional)",'<input name="time" type="time" value="'+esc(record?.time||"")+'">')+'</div>'+
+      field("Due date",'<input name="due" type="date" value="'+esc(record?.due??defaultDue)+'">')+
+      '<div class="form-pair">'+field("Start time · 开始",'<input name="time" type="time" value="'+esc(record?.time??slotTime)+'">')+
+      field("End time · 结束",'<input name="endTime" type="time" value="'+esc(record?.endTime??slotEnd)+'">')+'</div>'+
       '<div class="form-pair">'+field("Priority",select("priority",priorities.map(x=>[x,x]),record?.priority||"Medium"))+
       field("Status",select("status",groups.map(x=>[x,x]),record?.status||"To do"))+'</div>';
   } else {
@@ -394,6 +402,11 @@ function submitRecord(event){
     form.elements.due.reportValidity();
     return;
   }
+  if (task && fields.endTime && !validTimeRange(fields.time,fields.endTime)) {
+    form.elements.endTime.setCustomValidity(fields.time ? "Choose an end later than the start, or midnight." : "Choose a start time first.");
+    form.elements.endTime.reportValidity();
+    return;
+  }
   const collection=task?"tasks":"projects", next=structuredClone(state);
   const record={id:key||id(),...fields,sample:false};
   if(key){
@@ -420,7 +433,7 @@ function handleAction(event){
     }
     case "rain": {
       const visible = $("#rain").hidden;
-      applyRain(visible);
+      applyPrecipitation(visible);
       try { localStorage.setItem(rainKey, visible ? "on" : "off"); } catch { /* Keep this choice for the current visit. */ }
       break;
     }
@@ -428,7 +441,7 @@ function handleAction(event){
       const open=document.body.classList.toggle("menu-open");$("#scrim").hidden=!open;
       $("#menu-btn").setAttribute("aria-expanded",String(open));if(open) $("#sidebar .brand").focus();else $("#menu-btn").focus();break;
     }
-    case "new-task": closeMenu();editor("task",undefined,control.closest("#calendar") ? dayKey(calendarDate) : dayKey());break;
+    case "new-task": closeMenu();editor("task",undefined,control.closest("#calendar") ? dayKey(calendarDate) : dayKey(),control.dataset.time);break;
     case "new-project": closeMenu();editor("project");break;
     case "edit-task": editor("task",getTask(key));break;
     case "edit-project": editor("project",getProject(key));break;
@@ -469,7 +482,10 @@ document.addEventListener("submit",submitRecord);
 document.addEventListener("input",e=>{
   if(e.target.id==="task-search"){search=e.target.value;$("#results").innerHTML=taskResults(route==="project"?getProject(projectId):null);}
   if(e.target.matches("#record-form input"))e.target.setCustomValidity("");
-  if(e.target.matches("#record-form [name=time]"))e.target.form.elements.due.setCustomValidity("");
+  if(e.target.matches("#record-form [name=time]")){
+    e.target.form.elements.due.setCustomValidity("");
+    e.target.form.elements.endTime.setCustomValidity("");
+  }
 });
 document.addEventListener("change",async e=>{
   if(e.target.id==="project-filter"){projectFilter=e.target.value;$("#results").innerHTML=taskResults(null);}
@@ -491,8 +507,8 @@ window.addEventListener("hashchange", () => {
 });
 window.addEventListener("storage",e=>{
   if (e.key === appearanceKey) { applyAppearance(e.newValue); return; }
-  if (e.key === rainKey) { applyRain(e.newValue !== "off"); return; }
-  if (e.key === null) applyRain(true);
+  if (e.key === rainKey) { applyPrecipitation(e.newValue !== "off"); return; }
+  if (e.key === null) applyPrecipitation(true);
   if(e.key!==storageKey&&e.key!==null) return;
   if(dialog.open) dialog.close();
   load();setRoute();notify("Workspace updated in another tab");
@@ -516,7 +532,7 @@ try {
   savedRain = localStorage.getItem(rainKey);
 } catch { /* Use the default appearance and rain settings. */ }
 applyAppearance(savedAppearance);
-applyRain(savedRain !== "off");
+applyPrecipitation(savedRain !== "off");
 load();
 setRoute();
 if (route !== "welcome") scrollToRoute("instant", false);

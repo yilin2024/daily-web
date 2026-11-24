@@ -118,7 +118,39 @@ body { isolation: isolate; padding-top: var(--header-height); }
     radial-gradient(ellipse at 7% 105%, #222833 0%, transparent 34%),
     linear-gradient(167deg, #21252d 0%, #12151b 42%, #0c0e12 83%);
 }
-.rain, .sunlight { position: absolute; inset: 0; }
+.rain, .snow, .sunlight { position: absolute; inset: 0; }
+.snow {
+  --flake: #f4f8ffeb;
+  --rim: #d9e8fd60;
+  opacity: .4;
+}
+.snow::before, .snow::after {
+  content: "";
+  position: absolute;
+  inset: calc(-1 * var(--tile)) -24px 0;
+  background-repeat: repeat;
+  background-size: var(--tile) var(--tile);
+  background-image:
+    radial-gradient(circle at 12% 21%, var(--flake) 1px, var(--rim) 1.7px, transparent 2.2px),
+    radial-gradient(circle at 61% 7%, var(--flake) .8px, transparent 1.5px),
+    radial-gradient(circle at 88% 38%, var(--flake) 1.8px, var(--rim) 2.2px, transparent 3px),
+    radial-gradient(circle at 36% 48%, var(--flake) 1.3px, transparent 2px),
+    radial-gradient(circle at 19% 83%, var(--flake) .8px, transparent 1.6px),
+    radial-gradient(circle at 72% 69%, var(--flake) 1.1px, var(--rim) 1.7px, transparent 2.3px),
+    radial-gradient(circle at 47% 94%, var(--flake) 1.5px, transparent 2.2px);
+}
+.snow::before { --tile: 158px; --drift: -12px; opacity: .62; }
+.snow::after { --tile: 247px; --drift: 19px; background-position: 53px 34px; }
+:root[data-appearance="light"] .snow { --flake: #ffffff; --rim: #6073889c; filter: drop-shadow(0 1px 1px #42597677); }
+@keyframes snowfall {
+  0% { transform: translate(0, 0); }
+  50% { transform: translate(var(--drift), calc(var(--tile) / 2)); }
+  100% { transform: translate(0, var(--tile)); }
+}
+@keyframes weather-cycle {
+  0%, 25%, 100% { opacity: 1; }
+  50%, 75% { opacity: 0; }
+}
 .rain::before, .rain::after {
   --stretch: 1.62;
   --tile-height: calc(var(--tile) * var(--stretch));
@@ -447,6 +479,10 @@ body { isolation: isolate; padding-top: var(--header-height); }
 .result-count { padding: 8px 16px; color: var(--sub); font-size: 12px; border-bottom: 1px solid var(--line); }
 @media (prefers-reduced-motion: no-preference) {
   html { scroll-behavior: smooth; }
+  .rain, .snow { animation: weather-cycle 32s ease-in-out infinite; }
+  .snow { animation-delay: -16s; }
+  .snow::before { animation: snowfall 8s linear infinite; }
+  .snow::after { animation: snowfall 5.5s linear infinite; }
   .rain::before { animation: rainfall calc(1.35s * var(--stretch)) linear infinite; }
   .rain::after { animation: rainfall calc(.86s * var(--stretch)) linear infinite; }
   .enter-work .icon { transition: transform .15s; }

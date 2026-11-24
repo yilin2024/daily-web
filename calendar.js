@@ -1,6 +1,7 @@
 "use strict";
 
 let calendarView = "day";
+let calendarFullDay = false;
 let calendarDate = new Date();
 calendarDate.setHours(12, 0, 0, 0);
 
@@ -41,6 +42,15 @@ function calendarTime(value) {
   return (Number(hour) % 12 || 12) + ":" + minute + (Number(hour) < 12 ? " AM" : " PM");
 }
 
+function clockMinutes(value) {
+  const [hour, minute] = value.split(":").map(Number);
+  return hour * 60 + minute;
+}
+
+function clockLabel(minutes) {
+  return String(Math.floor(minutes / 60)).padStart(2, "0") + ":" + String(minutes % 60).padStart(2, "0");
+}
+
 function calendarTaskDates() {
   const byDate = new Map();
   for (const task of state.tasks) {
@@ -59,23 +69,26 @@ function calendarColor(project) {
   return project ? `--accent:var(--cal-${project.color},${palette[project.color].accent})` : "--accent:var(--cal-unassigned,var(--faint))";
 }
 
-function calendarEvent(task, projects, compact) {
+function calendarEvent(task, projects, compact, position = "") {
   const project = projects.get(task.project);
   const done = task.status === "Done";
   const title = esc(task.title);
   const time = task.time ? calendarTime(task.time) : "";
+  const range = task.endTime ? task.time + "–" + (task.endTime === "00:00" ? "24:00" : task.endTime) : task.time || "";
   const projectName = esc(project?.name || "Unassigned");
-  const description = [done ? "Completed" : "", time, title, projectName].filter(Boolean).join(" · ");
+  const description = [done ? "Completed" : "", range, title, projectName].filter(Boolean).join(" · ");
   const style = calendarColor(project);
   if (compact) {
     return `<button class="cal-event${done ? " is-done" : ""}" style="${style}" data-action="edit-task" data-key="${task.id}" title="${description}" aria-label="Edit ${description}">
       ${time ? `<span class="cal-time">${time}</span>` : ""}<span class="cal-event-title">${title}</span></button>`;
   }
-  return `<div class="cal-agenda-row${done ? " is-done" : ""}" style="${style}">
+  const row = position ? "cal-block" : "cal-agenda-row";
+  return `<div class="${row}${done ? " is-done" : ""}" style="${style};${position}">
     <button class="check${done ? " checked" : ""}" data-action="toggle" data-key="${task.id}" role="checkbox" aria-checked="${done}" aria-label="Mark ${title} ${done ? "open" : "complete"}">${done ? icon("check") : ""}</button>
-    <button class="cal-agenda-task" data-action="edit-task" data-key="${task.id}" aria-label="Edit ${description}">
-      <span class="cal-task-title">${title}</span><span class="cal-project"><i class="dot"></i>${projectName}</span>
-    </button>${time ? `<time class="cal-agenda-time" datetime="${task.due}T${task.time}">${time}</time>` : ""}</div>`;
+    <button class="cal-agenda-task" data-action="edit-task" data-key="${task.id}" aria-label="Edit ${description}" title="${description}">
+      ${time ? `<time class="cal-agenda-time" datetime="${task.due}T${task.time}">${range}</time>` : ""}
+      <span class="cal-task-title">${title}</span>${position ? "" : `<span class="cal-project"><i class="dot"></i>${projectName}</span>`}
+    </button></div>`;
 }
 
 function calendarDayButton(date, showWeekday = true, markers = "", count = 0) {
@@ -87,14 +100,82 @@ function calendarDayButton(date, showWeekday = true, markers = "", count = 0) {
     ${showWeekday ? `<span class="cal-weekday">${calendarFormats.weekday.format(date)}</span>` : ""}<span class="cal-number">${date.getDate()}</span>${markers}</button>`;
 }
 
+// Tasks arrive in start-time order. Only tasks in the same overlapping group share columns.
+function calendarDayBlocks(tasks) {
+  const blocks = [];
+  let group, groupEnd = 0, laneEnds = [];
+  for (const task of tasks) {
+    const start = clockMinutes(task.time);
+    const end = task.endTime ? (clockMinutes(task.endTime) || 1440) : start + 1;
+    if (!group || start >= groupEnd) {
+      group = {columns: 0};
+      groupEnd = end;
+      laneEnds = [];
+    }
+    let lane = laneEnds.findIndex(freeAt => freeAt <= start);
+    if (lane === -1) lane = laneEnds.length;
+    laneEnds[lane] = end;
+    group.columns = laneEnds.length;
+    groupEnd = Math.max(groupEnd, end);
+    blocks.push({task, start, end, lane, group});
+  }
+  return blocks;
+}
+
+function calendarTimetable(tasks, projects) {
+  const blocks = calendarDayBlocks(tasks);
+  let first = calendarFullDay ? 0 : 8 * 60, last = calendarFullDay ? 1440 : 18 * 60;
+  let columns = 1;
+  const ends = new Map();
+  const ticks = new Set();
+  for (const block of blocks) {
+    first = Math.min(first, Math.floor(block.start / 60) * 60);
+    last = Math.max(last, Math.ceil(block.end / 60) * 60);
+    columns = Math.max(columns, block.group.columns);
+    ticks.add(block.start);
+    ticks.add(block.end);
+    if (!ends.has(block.end)) ends.set(block.end, []);
+    ends.get(block.end).push(block.start);
+  }
+  for (let minute = first; minute <= last; minute += 30) ticks.add(minute);
+  // Keep even a one-minute booking readable. Stretch its interval and shift later labels with it.
+  const y = new Map();
+  let previous = first, height = 0;
+  for (const minute of [...ticks].sort((a, b) => a - b)) {
+    height += (minute - previous) * 1.4;
+    for (const start of ends.get(minute) || []) height = Math.max(height, y.get(start) + 45);
+    y.set(minute, height);
+    previous = minute;
+  }
+  const labels = [], slots = [];
+  for (let minute = first; minute <= last; minute += 30) {
+    const value = clockLabel(minute), top = y.get(minute);
+    if (minute % 60 === 0) labels.push(`<span style="top:${top}px">${value}</span>`);
+    if (minute === last) break;
+    const slotHeight = y.get(minute + 30) - top;
+    slots.push(`<button class="cal-slot${minute % 60 ? " half-hour" : ""}" style="top:${top}px;height:${slotHeight}px" data-action="new-task" data-time="${value}" aria-label="Add a task at ${value}">
+      <span aria-hidden="true">+ ${value}</span></button>`);
+  }
+  const bookings = blocks.map(({task, start, end, lane, group}) => {
+    const style = `top:${y.get(start)}px;height:${y.get(end) - y.get(start)}px;left:${100 * lane / group.columns}%;width:${100 / group.columns}%`;
+    return calendarEvent(task, projects, false, style);
+  }).join("");
+  return `<section class="cal-schedule" aria-labelledby="schedule-heading">
+    <div class="cal-schedule-heading"><h3 id="schedule-heading">Timetable <small lang="zh-Hans">日课表</small></h3>
+    <button data-cal="hours" aria-pressed="${calendarFullDay}">24 hours</button></div>
+    ${tasks.length ? "" : '<p class="cal-slot-hint">点空白时段安排任务 · Select a time slot to add a task.</p>'}
+    <div class="cal-timetable"><div class="cal-ruler" aria-hidden="true">${labels.join("")}</div>
+    <div class="cal-lanes-viewport"><div class="cal-lanes" style="height:${height}px;--columns:${columns}">${slots.join("")}${bookings}</div></div></div></section>`;
+}
+
 function calendarDayView(week, tasks, projects) {
-  const agenda = (label, items) => items.length ? `<section class="cal-group"><h3>${label}</h3>${items.map(t => calendarEvent(t, projects, false)).join("")}</section>` : "";
+  const allDay = tasks.filter(t => !t.time);
   const open = tasks.filter(item => item.status !== "Done").length;
   return `<nav class="cal-strip" aria-label="Days of this week">${week.map(date => calendarDayButton(date)).join("")}</nav>
     <div class="cal-agenda"><div class="cal-agenda-heading"><h2>${calendarFormats.dayHeading.format(calendarDate)}</h2>
     <span>${open} open · ${tasks.length - open} done</span></div>
-    ${agenda("All-day", tasks.filter(t => !t.time))}${agenda("Scheduled", tasks.filter(t => t.time))}
-    ${tasks.length ? "" : '<div class="cal-empty"><p>No tasks scheduled.</p><button class="text-btn" data-action="new-task">Add a task for this day</button></div>'}</div>`;
+    ${allDay.length ? `<section class="cal-group"><h3>All-day · 全天</h3><div class="cal-all-day">${allDay.map(t => calendarEvent(t, projects, false)).join("")}</div></section>` : ""}
+    ${calendarTimetable(tasks.filter(t => t.time), projects)}</div>`;
 }
 
 function calendarWeekView(week, byDate, projects) {
@@ -164,6 +245,7 @@ document.addEventListener("click", event => {
   if (!button) return;
   const {cal, value} = button.dataset;
   if (cal === "view") calendarView = value;
+  if (cal === "hours") calendarFullDay = !calendarFullDay;
   if (cal === "date") {
     calendarDate = new Date(value + "T12:00:00");
     calendarView = "day";
